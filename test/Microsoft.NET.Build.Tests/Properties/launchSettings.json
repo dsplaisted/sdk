@@ -3,7 +3,7 @@
     "Microsoft.NET.Build.Tests": {
       "commandName": "Executable",
       "executablePath": "$(RunCommand)",
-      "commandLineArgs": "\"$(OutDir)xunit.console.netcore.exe\" \"$(OutDir)$(AssemblyName).dll\" -wait",
+      "commandLineArgs": "\"$(OutDir)xunit.console.netcore.exe\" \"$(OutDir)$(AssemblyName).dll\" -wait -method Microsoft.NET.Build.Tests.GivenThatWeWantToBuildACrossTargetedLibrary.It_builds_desktop_library_successfully_on_windows",
       "workingDirectory": "$(OutDir)"
     }
   }

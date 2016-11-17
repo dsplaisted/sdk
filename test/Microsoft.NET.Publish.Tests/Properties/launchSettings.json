@@ -3,7 +3,7 @@
     "Microsoft.NET.Build.Tests": {
       "commandName": "Executable",
       "executablePath": "$(RunCommand)",
-      "commandLineArgs": "\"$(OutDir)xunit.console.netcore.exe\" \"$(OutDir)$(AssemblyName).dll\" -wait",
+      "commandLineArgs": "\"$(OutDir)xunit.console.netcore.exe\" \"$(OutDir)$(AssemblyName).dll\" -wait -method Microsoft.NET.Publish.Tests.GivenThatWeWantToPublishAHelloWorldProject.It_publishes_self_contained_apps_to_the_publish_folder_and_the_app_should_run",
       "workingDirectory": "$(OutDir)"
     }
   }

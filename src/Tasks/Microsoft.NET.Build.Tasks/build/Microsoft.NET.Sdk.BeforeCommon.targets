@@ -91,7 +91,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     <Reference Include="System.Xml"/>
   </ItemGroup>
   
-  <!-- Reference platform NuGet packages -->
+  <!-- Reference platform NuGet packages --><!--
   <ItemGroup Condition=" '$(DisableImplicitNuGetReferences)' != 'true' and '$(TargetFrameworkIdentifier)' == '.NETStandard'">
     <PackageReference Include="NETStandard.Library">
       <Version>1.6</Version>
@@ -102,7 +102,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     <PackageReference Include="Microsoft.NETCore.App">
       <Version>1.0.1</Version>
     </PackageReference>
-  </ItemGroup>
+  </ItemGroup>-->
   
 
   <!-- Add conditional compilation symbols for the target framework (for example NET461, NETSTANDARD2_0, NETCOREAPP1_0) -->

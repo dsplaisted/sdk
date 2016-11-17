@@ -11,7 +11,17 @@
     <authors>dotnet</authors>
     <projectUrl>http://dot.net</projectUrl>
     <dependencies>
+      <group>
         <dependency id="Nuget.Build.Tasks.Pack" version="4.0.0-rc-2048" />
+      </group>
+      <group targetFramework="netstandard1.0">
+        <dependency id="NetStandard.Library" version="1.6" />
+        <dependency id="Nuget.Build.Tasks.Pack" version="4.0.0-rc-2048" />
+      </group>
+      <group targetFramework="netcoreapp1.0">
+        <dependency id="Microsoft.NETCore.App" version="1.0.1" />
+        <dependency id="Nuget.Build.Tasks.Pack" version="4.0.0-rc-2048" />
+      </group>
     </dependencies>
   </metadata>
   <files>

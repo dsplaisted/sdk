@@ -114,6 +114,12 @@ namespace Microsoft.NET.Build.Tasks
             var nonPrivateAssetsToSearch = new Stack<string>();
             var privateAssetsToSearch = new Stack<string>();
 
+            if (PlatformLibrary != null)
+            {
+                nonPrivateAssets.Add(PlatformLibrary.Name);
+                nonPrivateAssetsToSearch.Push(PlatformLibrary.Name);
+            }
+
             // Start with the top-level dependencies, and put them into "private" or "non-private" buckets
             var privateAssetPackagesLookup = new HashSet<string>(privateAssetPackageIds, StringComparer.OrdinalIgnoreCase);
             foreach (var topLevelDependency in GetTopLevelDependencies())
