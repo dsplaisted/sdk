@@ -112,6 +112,12 @@ Copyright (c) .NET Foundation. All rights reserved.
   
   <!-- Default item includes (globs and implicit references) -->
   <Import Project="Microsoft.NET.Sdk.DefaultItems.props" />
+
+  <!-- Save the BaseIntermediateOutputPath here so we can check if it was modified later (which causes problems) in the
+       CheckForInconsistentBaseIntermediateOutputPath target. -->
+  <PropertyGroup>
+    <_BaseIntermediateOutputPathUsedForMSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</_BaseIntermediateOutputPathUsedForMSBuildProjectExtensionsPath>
+  </PropertyGroup>
   
   <!-- Temporary workarounds -->
   <PropertyGroup>

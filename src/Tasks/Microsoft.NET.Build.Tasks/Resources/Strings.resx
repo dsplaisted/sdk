@@ -249,4 +249,7 @@
   <data name="RuntimeIdentifierWasNotSpecified" xml:space="preserve">
     <value>Specify a RuntimeIdentifier</value>
   </data>
+  <data name="ModifiedIntermediatePath" xml:space="preserve">
+    <value>The 'BaseIntermediateOutputPath' property was modified after it was used in Microsoft.Common.props.  If you set this property, you should do it before Microsoft.Common.props is imported.  For more information, see {0}</value>
+  </data>
 </root>

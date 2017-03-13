@@ -382,6 +382,37 @@ Copyright (c) .NET Foundation. All rights reserved.
     <ProjectCapability Include="FolderPublish" />
   </ItemGroup>
 
+  <!--
+  ============================================================
+                CheckForInconsistentBaseIntermediateOutputPath
+  
+  If you modify the BaseIntermediateOutputPath property after Microsoft.Common.props has used it (for example by setting the property
+  in the body of project using Microsoft.NET.Sdk), then the modified value won't be honored for the automatic project .props and
+  .targets imports.  Furthermore, the NuGet restore operation will generate .props and .targets in the folder specified by the
+  modified value, however those files won't be imported during the build.  This will mean that .props and .targets files from
+  NuGet packages won't be imported at all.
+  
+  So in this target we check to see if the BaseIntermediateOutputPath property has been modified since its value was used in
+  Microsoft.Common.props to determine the MSBuildProjectExtensionsPath, which is where $(MSBuildProjectFile).*.props and
+  $(MSBuildProjectFile).*.targets are imported from.  If it has been modified we generate an error.
+  ============================================================
+  -->
+
+  <Target Name="CheckForInconsistentBaseIntermediateOutputPath"
+          Condition="'$(_BaseIntermediateOutputPathUsedForMSBuildProjectExtensionsPath)' != '' And '$(_BaseIntermediateOutputPathUsedForMSBuildProjectExtensionsPath)' != '$(BaseIntermediateOutputPath)' "
+          BeforeTargets="_CheckForInvalidConfigurationAndPlatform">
+
+    <PropertyGroup>
+      <ModifiedIntermediatePathMoreInformationLink>https://aka.ms/modifiedintermediatepath</ModifiedIntermediatePathMoreInformationLink>
+    </PropertyGroup>
+    
+    <NETSdkError
+             ResourceName="ModifiedIntermediatePath"
+             FormatArguments="$(ModifiedIntermediatePathMoreInformationLink)" />
+    
+  </Target>
+
+
   <Import Project="$(MSBuildThisFileDirectory)Microsoft.NET.DisableStandardFrameworkResolution.targets" Condition="'$(DisableStandardFrameworkResolution)' == 'true'" />
   <Import Project="$(MSBuildThisFileDirectory)Microsoft.NET.GenerateAssemblyInfo.targets" />
   <Import Project="$(MSBuildThisFileDirectory)Microsoft.NET.ComposeCache.targets" />
