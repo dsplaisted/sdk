@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using Microsoft.DotNet.Cli.Utils;
+using Microsoft.NET.TestFramework.Commands;
 
 namespace Microsoft.NET.TestFramework
 {
@@ -145,22 +146,20 @@ namespace Microsoft.NET.TestFramework
             return directory;
         }
 
-        public static ICommand AddTestEnvironmentVariables(ICommand command)
+        public static void AddTestEnvironmentVariables(SdkCommandSpec command)
         {
             //  Set NUGET_PACKAGES environment variable to match value from build.ps1
-            command = command.EnvironmentVariable("NUGET_PACKAGES", RepoInfo.NuGetCachePath);
+            command.Environment["NUGET_PACKAGES"] = RepoInfo.NuGetCachePath;
 
-            command = command.EnvironmentVariable("MSBuildSDKsPath", RepoInfo.SdksPath);
-            command = command.EnvironmentVariable("DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", RepoInfo.SdksPath);
+            command.Environment["MSBuildSDKsPath"] = RepoInfo.SdksPath;
+            command.Environment["DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR"] = RepoInfo.SdksPath;
 
-            command = command.EnvironmentVariable("NETCoreSdkBundledVersionsProps", Path.Combine(RepoInfo.CliSdkPath, "Microsoft.NETCoreSdk.BundledVersions.props"));
+            command.Environment["NETCoreSdkBundledVersionsProps"] = Path.Combine(RepoInfo.CliSdkPath, "Microsoft.NETCoreSdk.BundledVersions.props");
 
             // The following line can be removed once this file is integrated into MSBuild
-            command = command.EnvironmentVariable("CustomAfterMicrosoftCommonTargets", Path.Combine(RepoInfo.BuildExtensionsSdkPath, 
-                "msbuildExtensions-ver", "Microsoft.Common.targets", "ImportAfter", "Microsoft.NET.Build.Extensions.targets"));
-            command = command.EnvironmentVariable("MicrosoftNETBuildExtensionsTargets", Path.Combine(RepoInfo.BuildExtensionsMSBuildPath, "Microsoft.NET.Build.Extensions.targets"));
-
-            return command;
+            command.Environment["CustomAfterMicrosoftCommonTargets"] = Path.Combine(RepoInfo.BuildExtensionsSdkPath, 
+                "msbuildExtensions-ver", "Microsoft.Common.targets", "ImportAfter", "Microsoft.NET.Build.Extensions.targets");
+            command.Environment["MicrosoftNETBuildExtensionsTargets"] = Path.Combine(RepoInfo.BuildExtensionsMSBuildPath, "Microsoft.NET.Build.Extensions.targets");
         }
     }
 }
