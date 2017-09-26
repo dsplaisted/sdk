@@ -9,7 +9,7 @@
   </PropertyGroup>
   
   <ItemGroup Condition="'$(OutputType)' == 'Exe' ">
-    <Compile Include="$(MSBuildThisFileDirectory)TestProgram.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TestProgram.cs" Visible="false" />
     
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.0.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="$(xunitVisualStudioVersion)" />
