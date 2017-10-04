@@ -37,7 +37,7 @@ namespace Microsoft.NET.Restore.Tests
             string testProjectName = $"{projectPrefix}Fallback";
             TestAsset testProjectTestAsset = CreateTestAsset(testProjectName, framework);
 
-            var packagesFolder = Path.Combine(RepoInfo.TestsFolder, "packages", testProjectName);
+            var packagesFolder = Path.Combine(TestContext.Current.TestExecutionDirectory, "packages", testProjectName);
 
             var restoreCommand = testProjectTestAsset.GetRestoreCommand(Log, relativePath: testProjectName);
             restoreCommand.Execute($"/p:RestorePackagesPath={packagesFolder}").Should().Pass();
@@ -101,7 +101,7 @@ namespace Microsoft.NET.Restore.Tests
                 new TestPackageReference(
                     projectInNuGetFallbackFolder.Name,
                     "1.0.0",
-                    RepoInfo.NuGetFallbackFolder);
+                    TestContext.Current.NuGetFallbackFolder);
 
             if (!projectInNuGetFallbackFolderPackageReference.NuGetPackageExists())
             {
@@ -115,11 +115,11 @@ namespace Microsoft.NET.Restore.Tests
                     projectInNuGetFallbackFolder.Name);
                 var packagePackCommand =
                     new PackCommand(Log, dependencyProjectDirectory)
-                    .Execute($"/p:PackageOutputPath={RepoInfo.NuGetFallbackFolder}").Should().Pass();
+                    .Execute($"/p:PackageOutputPath={TestContext.Current.NuGetFallbackFolder}").Should().Pass();
 
                 ExtractNupkg(
-                    RepoInfo.NuGetFallbackFolder,
-                    Path.Combine(RepoInfo.NuGetFallbackFolder, $"{projectInNuGetFallbackFolder.Name}.1.0.0.nupkg"));
+                    TestContext.Current.NuGetFallbackFolder,
+                    Path.Combine(TestContext.Current.NuGetFallbackFolder, $"{projectInNuGetFallbackFolder.Name}.1.0.0.nupkg"));
             }
 
             return projectInNuGetFallbackFolderPackageReference;
