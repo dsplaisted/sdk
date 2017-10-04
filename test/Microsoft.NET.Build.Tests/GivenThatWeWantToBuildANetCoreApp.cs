@@ -237,7 +237,7 @@ public static class Program
 
             string outputFolder = buildCommand.GetOutputDirectory(project.TargetFrameworks, runtimeIdentifier: runtimeIdentifier ?? "").FullName;
 
-            Command.Create(RepoInfo.DotNetHostPath, new[] { Path.Combine(outputFolder, project.Name + ".dll") })
+            Command.Create(TestContext.Current.ToolsetUnderTest.DotNetHostPath, new[] { Path.Combine(outputFolder, project.Name + ".dll") })
                 .CaptureStdOut()
                 .Execute()
                 .Should()
