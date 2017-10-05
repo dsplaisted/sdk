@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.NET.TestFramework.Commands;
 
@@ -12,7 +13,7 @@ namespace Microsoft.NET.TestFramework
 
         public string DotNetHostPath { get; set; }
 
-        private string CliSdkPath
+        private string Stage0SdkPath
         {
             get
             {
@@ -27,24 +28,57 @@ namespace Microsoft.NET.TestFramework
 
         public string BuildExtensionsMSBuildPath { get; set; }
 
+        public bool ShouldUseFullFrameworkMSBuild => !string.IsNullOrEmpty(FullFrameworkMSBuildPath);
+
+        public string FullFrameworkMSBuildPath { get; set; }
+
         public void AddTestEnvironmentVariables(SdkCommandSpec command)
         {
-            ////  Set NUGET_PACKAGES environment variable to match value from build.ps1
-            //command.Environment["NUGET_PACKAGES"] = RepoInfo.NuGetCachePath;
-
             if (SdksPath != null)
             {
                 command.Environment["MSBuildSDKsPath"] = SdksPath;
                 command.Environment["DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR"] = SdksPath;
             }
 
-            command.Environment["NETCoreSdkBundledVersionsProps"] = Path.Combine(CliSdkPath, "Microsoft.NETCoreSdk.BundledVersions.props");
+            command.Environment["NETCoreSdkBundledVersionsProps"] = Path.Combine(Stage0SdkPath, "Microsoft.NETCoreSdk.BundledVersions.props");
 
             // The following line can be removed once this file is integrated into MSBuild
             command.Environment["CustomAfterMicrosoftCommonTargets"] = Path.Combine(BuildExtensionsSdkPath,
                 "msbuildExtensions-ver", "Microsoft.Common.targets", "ImportAfter", "Microsoft.NET.Build.Extensions.targets");
 
             command.Environment["MicrosoftNETBuildExtensionsTargets"] = Path.Combine(BuildExtensionsMSBuildPath, "Microsoft.NET.Build.Extensions.targets");
+        }
+
+        public SdkCommandSpec CreateCommandForTarget(string target, params string[] args)
+        {
+            var newArgs = args.ToList();
+            newArgs.Insert(0, $"/t:{target}");
+
+            return CreateCommand(newArgs.ToArray());
+        }
+
+        private SdkCommandSpec CreateCommand(params string[] args)
+        {
+            SdkCommandSpec ret = new SdkCommandSpec();
+
+            //  Run tests on full framework MSBuild if environment variable is set pointing to it
+            if (ShouldUseFullFrameworkMSBuild)
+            {
+                ret.FileName = FullFrameworkMSBuildPath;
+                ret.Arguments = args.ToList();
+            }
+            else
+            {
+                var newArgs = args.ToList();
+                newArgs.Insert(0, $"msbuild");
+
+                ret.FileName = DotNetHostPath;
+                ret.Arguments = newArgs;
+            }
+
+            TestContext.Current.AddTestEnvironmentVariables(ret);
+
+            return ret;
         }
     }
 }
