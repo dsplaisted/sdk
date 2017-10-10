@@ -46,6 +46,9 @@ namespace Microsoft.NET.TestFramework
 
             command.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
 
+            command.Environment["GenerateResourceMSBuildArchitecture"] = "CurrentArchitecture";
+            command.Environment["GenerateResourceMSBuildRuntime"] = "CurrentRuntime";
+
             ToolsetUnderTest.AddTestEnvironmentVariables(command);
         }
 
