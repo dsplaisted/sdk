@@ -115,13 +115,16 @@ namespace Microsoft.NET.TestFramework
             else
             {
                 ret.DotNetHostPath = ResolveCommand("dotnet");
-                if (ret.DotNetHostPath == null)
-                {
-                    throw new InvalidOperationException("Could not resolve path to dotnet");
-                }
             }
 
-            ret.FullFrameworkMSBuildPath = commandLine.FullFrameworkMSBuildPath;
+            if (!string.IsNullOrEmpty(commandLine.FullFrameworkMSBuildPath))
+            {
+                ret.FullFrameworkMSBuildPath = commandLine.FullFrameworkMSBuildPath;
+            }
+            else if (commandLine.UseFullFrameworkMSBuild)
+            {
+                ret.FullFrameworkMSBuildPath = ResolveCommand("MSBuild");
+            }
 
             return ret;
         }
@@ -145,6 +148,11 @@ namespace Microsoft.NET.TestFramework
             var paths = Environment.GetEnvironmentVariable("PATH").Split(pathSplitChar);
             string result = extensions.SelectMany(ext => paths.Select(p => Path.Combine(p, command + ext)))
                 .FirstOrDefault(File.Exists);
+
+            if (result == null)
+            {
+                throw new InvalidOperationException("Could not resolve path to " + command);
+            }
 
             return result;
         }
