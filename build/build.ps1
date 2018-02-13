@@ -247,7 +247,14 @@ function Build {
     if ($properties -ne $null)
     {
       $Host.UI.RawUI.WindowTitle = "SDK Test ($RepoRoot) ($configuration)"
-      & $properties[0] $properties[1..($properties.Length-1)]
+      if ($properties.Length -eq 1)
+      {
+        & $properties[0]
+      }
+      else
+      {
+        & $properties[0] $properties[1..($properties.Length-1)]
+      }
     }
     exit 0
   }
