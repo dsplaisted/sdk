@@ -98,18 +98,74 @@ namespace Microsoft.NET.Build.Tests
                 .Should()
                 .Pass();
 
-            var outputDirectory = buildCommand.GetOutputDirectory(targetFramework, runtimeIdentifier: runtimeIdentifier);
+            var targetingInfo = GetProjectTargetingInfo(testProject, buildCommand);
+
             if (isExe)
             {
-                //  Self-contained apps don't write a framework version to the runtimeconfig, so only check this for framework-dependent apps
-                if (!selfContained)
+                
+                if (selfContained)
                 {
+                    targetingInfo.DepsJsonNetCoreAppVersion.Should().Be(expectedPackageVersion);
+                }
+                else
+                {
+                    targetingInfo.RuntimeConfigRuntimeFrameworkVersion.Should().Be(expectedRuntimeVersion);
+                }
+
+                // can't use Path.Combine on segments with an illegal `|` character
+                var expectedPath = $"{Path.Combine(GetUserProfile(), ".dotnet", "store")}{Path.DirectorySeparatorChar}|arch|{Path.DirectorySeparatorChar}|tfm|";
+                targetingInfo.DevRuntimeConfigAdditionalProbingPaths.Should().Contain(expectedPath);
+            }
+
+            LockFile lockFile = LockFileUtilities.GetLockFile(Path.Combine(buildCommand.ProjectRootPath, "obj", "project.assets.json"), NullLogger.Instance);
+
+            targetingInfo.AssetsFileNetCoreAppVersion.Should().Be(expectedPackageVersion);
+        }
+
+        class ProjectTargetingInfo
+        {
+            public string RuntimeConfigRuntimeFrameworkVersion { get; set; }
+            public string DepsJsonNetCoreAppVersion { get; set; }
+            public List<string> DevRuntimeConfigAdditionalProbingPaths { get; set; }
+            public string AssetsFileNetCoreAppVersion { get; set; }
+        }
+
+        ProjectTargetingInfo GetProjectTargetingInfo(TestProject testProject, MSBuildCommand msbuildCommand)
+        {
+            ProjectTargetingInfo targetingInfo = new ProjectTargetingInfo();
+
+            bool selfContained = testProject.RuntimeIdentifier != null;
+
+            var outputDirectory = msbuildCommand.GetOutputDirectory(testProject.TargetFrameworks, runtimeIdentifier: testProject.RuntimeIdentifier);
+            if (testProject.IsExe)
+            {
+                if (selfContained)
+                {
+                    //  Self-contained apps have Microsoft.NETCore.App listed in their deps.json
+                    outputDirectory.Should().HaveFile(testProject.Name + ".deps.json");
+                    string depsJsonFile = Path.Combine(outputDirectory.FullName, testProject.Name + ".deps.json");
+                    string depsJsonContents = File.ReadAllText(depsJsonFile);
+                    JObject depsJson = JObject.Parse(depsJsonContents);
+                    var netCoreAppLibraries = depsJson["libraries"].Cast<JProperty>().Select(o => o.Name)
+                        .Select(name =>
+                        {
+                            var parts = name.Split('/');
+                            return (name: parts[0], version: parts[1]);
+                        })
+                        .Where(library => library.name == "Microsoft.NETCore.App");
+                    netCoreAppLibraries.Should().HaveCount(1, "Microsoft.NETCore.App should be listed once in the libraries section of the deps.json file");
+
+                    targetingInfo.DepsJsonNetCoreAppVersion = netCoreAppLibraries.Single().version;
+                }
+                else
+                {
+                    //  Shared framework apps write a framework version to the runtimeconfig
                     string runtimeConfigFile = Path.Combine(outputDirectory.FullName, testProject.Name + ".runtimeconfig.json");
                     string runtimeConfigContents = File.ReadAllText(runtimeConfigFile);
                     JObject runtimeConfig = JObject.Parse(runtimeConfigContents);
 
                     string actualRuntimeFrameworkVersion = ((JValue)runtimeConfig["runtimeOptions"]["framework"]["version"]).Value<string>();
-                    actualRuntimeFrameworkVersion.Should().Be(expectedRuntimeVersion);
+                    targetingInfo.RuntimeConfigRuntimeFrameworkVersion = actualRuntimeFrameworkVersion;
                 }
 
                 var runtimeconfigDevFileName = testProject.Name + ".runtimeconfig.dev.json";
@@ -120,16 +176,16 @@ namespace Microsoft.NET.Build.Tests
                 JObject devruntimeConfig = JObject.Parse(devruntimeConfigContents);
 
                 var additionalProbingPaths = ((JArray)devruntimeConfig["runtimeOptions"]["additionalProbingPaths"]).Values<string>();
-                // can't use Path.Combine on segments with an illegal `|` character
-                var expectedPath = $"{Path.Combine(GetUserProfile(), ".dotnet", "store")}{Path.DirectorySeparatorChar}|arch|{Path.DirectorySeparatorChar}|tfm|";
-                additionalProbingPaths.Should().Contain(expectedPath);
+                targetingInfo.DevRuntimeConfigAdditionalProbingPaths = additionalProbingPaths.ToList();
             }
 
-            LockFile lockFile = LockFileUtilities.GetLockFile(Path.Combine(buildCommand.ProjectRootPath, "obj", "project.assets.json"), NullLogger.Instance);
+            LockFile lockFile = LockFileUtilities.GetLockFile(Path.Combine(msbuildCommand.ProjectRootPath, "obj", "project.assets.json"), NullLogger.Instance);
 
-            var target = lockFile.GetTarget(NuGetFramework.Parse(targetFramework), null);
+            var target = lockFile.GetTarget(NuGetFramework.Parse(testProject.TargetFrameworks), null);
             var netCoreAppLibrary = target.Libraries.Single(l => l.Name == "Microsoft.NETCore.App");
-            netCoreAppLibrary.Version.ToString().Should().Be(expectedPackageVersion);
+            targetingInfo.AssetsFileNetCoreAppVersion = netCoreAppLibrary.Version.ToString();
+
+            return targetingInfo;
         }
 
         private static string GetUserProfile()
