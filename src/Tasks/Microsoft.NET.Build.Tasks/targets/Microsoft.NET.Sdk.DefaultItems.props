@@ -56,4 +56,10 @@ Copyright (c) .NET Foundation. All rights reserved.
                       Publish="true" />    
   </ItemGroup>
 
+  <ItemGroup Condition=" '$(DisableImplicitFrameworkReferences)' != 'true' and '$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="$(NETFrameworkReferenceAssemblyImplicitPackageVersion)" IsImplicitlyDefined="true" PrivateAssets="All" />
+  </ItemGroup>
+  
+  
+
 </Project>
