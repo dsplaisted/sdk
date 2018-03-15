@@ -120,6 +120,14 @@ function InstallDotNetCli {
   DotNetCliVersion="$( GetVersionsPropsVersion DotNetCliVersion )"
   DotNetInstallVerbosity=""
 
+  if [ -z "$DOTNET_INSTALL_DIR" ]
+  then
+    export DOTNET_INSTALL_DIR="$ArtifactsDir/.dotnet/$DotNetCliVersion"
+  fi
+
+  DotNetRoot=$DOTNET_INSTALL_DIR
+  DotNetInstallScript="$DotNetRoot/dotnet-install.sh"
+
   if $dogfood
   then
     export SDK_REPO_ROOT="$RepoRoot"
@@ -130,14 +138,6 @@ function InstallDotNetCli {
     export CustomAfterMicrosoftCommonTargets="$MSBuildSDKsPath/Microsoft.NET.Build.Extensions/msbuildExtensions-ver/Microsoft.Common.Targets/ImportAfter/Microsoft.NET.Build.Extensions.targets"
     export MicrosoftNETBuildExtensionsTargets="$CustomAfterMicrosoftCommonTargets"
   fi
-
-  if [ -z "$DOTNET_INSTALL_DIR" ]
-  then
-    export DOTNET_INSTALL_DIR="$ArtifactsDir/.dotnet/$DotNetCliVersion"
-  fi
-
-  DotNetRoot=$DOTNET_INSTALL_DIR
-  DotNetInstallScript="$DotNetRoot/dotnet-install.sh"
 
   if [ ! -a "$DotNetInstallScript" ]
   then
@@ -258,7 +258,11 @@ function Build {
     return $?
   fi
 
-  InstallRepoToolset
+  
+  if [ $dogfood != true ]
+  then
+    InstallRepoToolset
+  fi
 
   if [ $? != 0 ]
   then
