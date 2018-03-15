@@ -97,13 +97,6 @@ Copyright (c) .NET Foundation. All rights reserved.
   -->
   <Import Project="$(MSBuildThisFileDirectory)Microsoft.NET.NuGetOfflineCache.targets" />
 
-  <PropertyGroup Condition=" '$(DisableImplicitFrameworkReferences)' != 'true' and '$(TargetFrameworkIdentifier)' == '.NETFramework'">
-    <!-- If we end up referencing the .NET Framework reference assembly packages, then by default use the reference assemblies in them.
-         This is set here instead of in the Microsoft.NET.Sdk.DefaultItems.targets file because it needs to be set before the .targets
-         from the NuGet package are evaluated. -->
-    <UseReferenceAssembliesFromPackage Condition="'$(UseReferenceAssembliesFromPackage)' == ''">true</UseReferenceAssembliesFromPackage>
-  </PropertyGroup>
-  
   <ItemGroup Condition=" '$(DisableImplicitFrameworkReferences)' != 'true' and '$(TargetFrameworkIdentifier)' == '.NETFramework'">    
     <_SDKImplicitReference Include="System"/>
     <_SDKImplicitReference Include="System.Data"/>

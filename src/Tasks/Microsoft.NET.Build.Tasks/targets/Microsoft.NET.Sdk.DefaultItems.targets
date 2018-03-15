@@ -140,12 +140,11 @@ Copyright (c) .NET Foundation. All rights reserved.
     <RuntimeFrameworkVersion Condition="'$(SelfContained)' != 'true' ">$(ImplicitRuntimeFrameworkVersionForFrameworkDependentApp)</RuntimeFrameworkVersion>
   </PropertyGroup>
   
-  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework' And '$(OS)' != 'Windows_NT'">
+  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework' And '$(OS)' != 'Windows_NT' And '$(DisableImplicitFrameworkReferences)' != 'true'">
     <UseNetFrameworkReferenceAssemblies Condition="'$(UseNetFrameworkReferenceAssemblies)' == ''">true</UseNetFrameworkReferenceAssemblies>
   </PropertyGroup>
   <PropertyGroup Condition="'$(UseNetFrameworkReferenceAssemblies)' == 'true'">
-    <NETFrameworkReferenceAssemblyImplicitPackageVersion Condition="'$(NETFrameworkReferenceAssemblyImplicitPackageVersion)' == ''">1.0.0</NETFrameworkReferenceAssemblyImplicitPackageVersion>
-    
+    <NETFrameworkReferenceAssemblyImplicitPackageVersion Condition="'$(NETFrameworkReferenceAssemblyImplicitPackageVersion)' == ''">1.0.0-alpha-001</NETFrameworkReferenceAssemblyImplicitPackageVersion>
   </PropertyGroup>
   
   <!--

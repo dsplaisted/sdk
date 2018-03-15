@@ -53,11 +53,14 @@ Copyright (c) .NET Foundation. All rights reserved.
     <PackageReference Update="Microsoft.NETCore.App"
                       Condition="('$(OutputType)' != 'Exe') And ('$(_TargetFrameworkVersionWithoutV)' != '') And ('$(_TargetFrameworkVersionWithoutV)' >= '2.0')"
                       PrivateAssets="All"
-                      Publish="true" />    
+                      Publish="true" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(DisableImplicitFrameworkReferences)' != 'true' and '$(TargetFrameworkIdentifier)' == '.NETFramework'">
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="$(NETFrameworkReferenceAssemblyImplicitPackageVersion)" IsImplicitlyDefined="true" PrivateAssets="All" />
+  <ItemGroup Condition=" '$(UseNetFrameworkReferenceAssemblies)' == 'true' and '$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      Version="$(NETFrameworkReferenceAssemblyImplicitPackageVersion)"
+                      IsImplicitlyDefined="true"
+                      PrivateAssets="All" />
   </ItemGroup>
   
   
