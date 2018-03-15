@@ -144,7 +144,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     <UseNetFrameworkReferenceAssemblies Condition="'$(UseNetFrameworkReferenceAssemblies)' == ''">true</UseNetFrameworkReferenceAssemblies>
   </PropertyGroup>
   <PropertyGroup Condition="'$(UseNetFrameworkReferenceAssemblies)' == 'true'">
-    <NETFrameworkReferenceAssemblyImplicitPackageVersion Condition="'$(NETFrameworkReferenceAssemblyImplicitPackageVersion)' == ''">1.0.0-alpha-001</NETFrameworkReferenceAssemblyImplicitPackageVersion>
+    <NETFrameworkReferenceAssemblyImplicitPackageVersion Condition="'$(NETFrameworkReferenceAssemblyImplicitPackageVersion)' == ''">1.0.0-alpha-002</NETFrameworkReferenceAssemblyImplicitPackageVersion>
   </PropertyGroup>
   
   <!--
