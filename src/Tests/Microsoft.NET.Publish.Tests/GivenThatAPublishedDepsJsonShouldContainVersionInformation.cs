@@ -255,8 +255,10 @@ static class Program
                 IsSdkProject = true,
                 IsExe = true
             };
-            var testAsset = _testAssetsManager.CreateTestProject(testProject)
-                .Restore(Log, testProject.Name);
+            var testAsset = _testAssetsManager.CreateTestProject(testProject);
+            NuGetConfigWriter.Write(testAsset.TestRoot, NuGetConfigWriter.DotnetCoreMyGetFeed);
+            testAsset.Restore(Log, testProject.Name);
+
             var getValuesCommand = new GetValuesCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name),
                         testProject.TargetFrameworks, "RuntimeFrameworkVersion")
             {
