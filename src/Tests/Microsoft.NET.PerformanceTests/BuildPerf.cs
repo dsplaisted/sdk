@@ -60,20 +60,44 @@ namespace Microsoft.NET.Perf.Tests
         }
 
         [CoreMSBuildOnlyTheory]
-        [InlineData(ProjectPerfOperation.CleanBuild)]
-        [InlineData(ProjectPerfOperation.BuildWithNoChanges)]
-        public void BuildMVCApp(ProjectPerfOperation operation)
+        [InlineData(ProjectPerfOperation.CleanBuild, true)]
+        [InlineData(ProjectPerfOperation.BuildWithNoChanges, true)]
+        [InlineData(ProjectPerfOperation.CleanBuild, false)]
+        [InlineData(ProjectPerfOperation.BuildWithNoChanges, false)]
+        public void BuildMVCApp(ProjectPerfOperation operation, bool includeRuntimeFileVersions)
         {
             var testDir = _testAssetsManager.CreateTestDirectory(identifier: operation.ToString());
 
             NuGetConfigWriter.Write(testDir.Path, NuGetConfigWriter.AspNetCoreDevFeed, NuGetConfigWriter.DotnetCoreMyGetFeed);
 
-            var newCommand = new DotnetCommand(Log);
-            newCommand.WorkingDirectory = testDir.Path;
+            string sourceProject = @"C:\Users\daplaist\source\repos\AspNetCore20App\AspNetCore20App";
+            FolderSnapshot.MirrorFiles(sourceProject, testDir.Path);
 
-            newCommand.Execute("new", "mvc", "--no-restore").Should().Pass();
+            if (includeRuntimeFileVersions)
+            {
+                foreach (var projFile in Directory.GetFiles(testDir.Path, "*.csproj", SearchOption.AllDirectories))
+                {
+                    var project = XDocument.Load(projFile);
+                    var ns = project.Root.Name.Namespace;
 
-            TestProject(testDir.Path, "ASP.NET Core MVC app", operation);
+                    project.Root.Element(ns + "PropertyGroup").Add(new XElement(ns + "IncludeRuntimeFileVersions", "true"));
+
+                    project.Save(projFile);
+                }
+            }
+
+            //var newCommand = new DotnetCommand(Log);
+            //newCommand.WorkingDirectory = testDir.Path;
+
+            //newCommand.Execute("new", "mvc", "--no-restore").Should().Pass();
+
+            string testName = "MVC app";
+            if (includeRuntimeFileVersions)
+            {
+                testName += " with versions";
+            }
+
+            TestProject(testDir.Path, testName, operation);
         }
 
         [CoreMSBuildOnlyTheory(Skip = "The code for these scenarios needs to be acquired during the test run (instead of relying on hard-coded local path)")]
