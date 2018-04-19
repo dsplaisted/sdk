@@ -517,6 +517,8 @@ Copyright (c) .NET Foundation. All rights reserved.
       Reading these versions could impact build perf, so we avoid doing it by default if we aren't publishing or if we are
       publishing a self-contained app.
       -->
+      
+    <!-- TODO: EnableRollForward -->
       <IncludeRuntimeFileVersions Condition =" '$(IncludeRuntimeFileVersions)' == '' And '$(SelfContained)' != 'true' ">true</IncludeRuntimeFileVersions>
     </PropertyGroup>
 

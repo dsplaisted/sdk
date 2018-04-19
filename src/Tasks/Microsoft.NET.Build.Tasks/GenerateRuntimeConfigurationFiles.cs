@@ -43,6 +43,8 @@ namespace Microsoft.NET.Build.Tasks
 
         public ITaskItem[] HostConfigurationOptions { get; set; }
 
+        public string HostRollForwardOnNoCandidateFxOption { get; set; }
+
         public ITaskItem[] AdditionalProbingPaths { get; set; }
 
         public bool IsSelfContained { get; set; }
@@ -141,6 +143,12 @@ namespace Microsoft.NET.Build.Tasks
             foreach (var hostConfigurationOption in HostConfigurationOptions)
             {
                 configProperties[hostConfigurationOption.ItemSpec] = GetConfigPropertyValue(hostConfigurationOption);
+            }
+
+            if (!string.IsNullOrEmpty(HostRollForwardOnNoCandidateFxOption) &&
+                int.TryParse(HostRollForwardOnNoCandidateFxOption, out int hostRollForwardOption))
+            {
+                runtimeOptions.RawOptions["rollForwardOnNoCandidateFx"] = new JValue(hostRollForwardOption);
             }
         }
 

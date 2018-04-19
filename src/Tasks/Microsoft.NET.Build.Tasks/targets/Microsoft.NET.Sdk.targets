@@ -121,6 +121,8 @@ Copyright (c) .NET Foundation. All rights reserved.
           Inputs="$(ProjectAssetsFile);$(MSBuildAllProjects)"
           Outputs="$(ProjectDepsFilePath)">
 
+    <!-- TODO: EnableRollForward -->
+    
     <!--
     Explicitly not passing any ExcludeFromPublishPackageReferences information during 'Build', since these dependencies
     should be included during 'Build'.  They are only excluded on 'Publish'.
