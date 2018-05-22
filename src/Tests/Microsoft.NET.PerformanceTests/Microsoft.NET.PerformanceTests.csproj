@@ -17,6 +17,7 @@
 
     <PropertyGroup>
     <PackageId>testSdkPerf</PackageId>
+    <RootNamespace>Microsoft.NET.Perf.Tests</RootNamespace>
   </PropertyGroup>
   
   <ItemGroup>
