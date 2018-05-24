@@ -70,6 +70,26 @@ namespace Microsoft.NET.Perf.Tests
         [Theory]
         [InlineData("console")]
         [InlineData("mvc")]
+        public void NoopRestore(string projectType)
+        {
+            var testDir = _testAssetsManager.CreateTestDirectory(identifier: projectType);
+            var newCommand = GetNewCommand(testDir, projectType);
+            newCommand.Execute().Should().Pass();
+
+            var command = GetRestoreCommand(testDir);
+            command.Execute().Should().Pass();
+
+            var perfTest = new PerfTest();
+            perfTest.ScenarioName = projectType;
+            perfTest.TestName = "restore (no-op)";
+            perfTest.ProcessToMeasure = command.GetProcessStartInfo();
+            perfTest.TestFolder = testDir.Path;
+            perfTest.Run();
+        }
+
+        [Theory]
+        [InlineData("console")]
+        [InlineData("mvc")]
 
         public void Build(string projectType)
         {
