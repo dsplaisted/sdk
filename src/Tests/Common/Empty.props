@@ -5,9 +5,9 @@
        importing the Sdk targets if they are not already imported -->
   <PropertyGroup Condition="'$(UsingMicrosoftNETSdk)' == '' ">
     <UsingMicrosoftNETSdk>false</UsingMicrosoftNETSdk>
-    <_ImportNetSdk Condition="'$(MSBuildProjectExtensionsPath)' == '.csproj'">true</_ImportNetSdk>
-    <_ImportNetSdk Condition="'$(MSBuildProjectExtensionsPath)' == '.vbproj'">true</_ImportNetSdk>
-    <_ImportNetSdk Condition="'$(MSBuildProjectExtensionsPath)' == '.fsproj'">true</_ImportNetSdk>
+    <_ImportNetSdk Condition="'$(MSBuildProjectExtension)' == '.csproj'">true</_ImportNetSdk>
+    <_ImportNetSdk Condition="'$(MSBuildProjectExtension)' == '.vbproj'">true</_ImportNetSdk>
+    <_ImportNetSdk Condition="'$(MSBuildProjectExtension)' == '.fsproj'">true</_ImportNetSdk>
     <ImportCommonPropsAndTargetsFromMicrosoftNETSdk>false</ImportCommonPropsAndTargetsFromMicrosoftNETSdk>
   </PropertyGroup>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" Condition="'$(_ImportNetSdk)' == 'true'"/>
