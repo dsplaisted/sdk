@@ -6,6 +6,11 @@ using System.Text;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
+//  TODO:
+//  - FrameworkList - Currently in Microsoft.NETCore.App.Ref
+//  - PackageOverrides - Currently in Microsoft.ASPNetCore.App.Ref
+//
+
 namespace Microsoft.NET.Build.Tasks
 {
     public class ResolveTargetingPackAssets : TaskBase
@@ -93,6 +98,8 @@ namespace Microsoft.NET.Build.Tasks
 
                         string platformManifestPath = possibleManifestPaths.FirstOrDefault(File.Exists);
 
+                        string packageOverridesPath = Path.Combine(targetingPackDataPath, "PackageOverrides.txt");
+
                         foreach (var dll in Directory.GetFiles(targetingPackDllPath, "*.dll"))
                         {
                             var reference = CreateReferenceItem(dll, targetingPack);
@@ -103,6 +110,11 @@ namespace Microsoft.NET.Build.Tasks
                         if (platformManifestPath != null)
                         {
                             platformManifests.Add(new TaskItem(platformManifestPath));
+                        }
+
+                        if (File.Exists(packageOverridesPath))
+                        {
+
                         }
 
                         if (targetingPack.ItemSpec.Equals("Microsoft.NETCore.App", StringComparison.OrdinalIgnoreCase))
