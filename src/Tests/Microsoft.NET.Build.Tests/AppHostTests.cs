@@ -277,6 +277,52 @@ namespace Microsoft.NET.Build.Tests
             }
         }
 
+        [Fact]
+        public void Apphost_pack_overrides_apphost_from_package()
+        {
+            var testProject = new TestProject()
+            {
+                Name="ApphostConflict",
+                TargetFrameworks = "netcoreapp3.0",
+                RuntimeIdentifier = EnvironmentInfo.GetCompatibleRid(),
+                IsSdkProject = true,
+                IsExe = true,
+                AdditionalProperties =
+                {
+                    ["SelfContained"] = "false"
+                }
+            };
+
+            testProject.PackageReferences.Add(new TestPackageReference("Microsoft.NETCore.App", "2.0.0"));
+
+            var testAsset = _testAssetsManager.CreateTestProject(testProject)
+                .Restore(Log, testProject.Name);
+
+            var buildCommand = new BuildCommand(Log, testAsset.TestRoot, testProject.Name);
+
+            buildCommand.Execute()
+                .Should()
+                .Pass();
+
+            var outputDirectory = buildCommand.GetOutputDirectory(testProject.TargetFrameworks, runtimeIdentifier: testProject.RuntimeIdentifier);
+
+            var hostExecutable = $"{testProject.Name}{Constants.ExeSuffix}";
+            outputDirectory.Should().OnlyHaveFiles(new[]
+            {
+                hostExecutable,
+                $"{testProject.Name}.dll",
+                $"{testProject.Name}.pdb",
+                $"{testProject.Name}.deps.json",
+                $"{testProject.Name}.runtimeconfig.json",
+                $"{testProject.Name}.runtimeconfig.dev.json",
+            });
+
+            new DotnetCommand(Log, Path.Combine(outputDirectory.FullName, hostExecutable))
+                .Execute()
+                .Should()
+                .Pass();
+        }
+
         private static bool IsPE32(string path)
         {
             using (var reader = new PEReader(File.OpenRead(path)))
