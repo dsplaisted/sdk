@@ -30,6 +30,10 @@
                   Lines="@(ManifestLines)"
                   Overwrite="true"
                   WriteOnlyWhenDifferent="true" />
+
+    <Copy SourceFiles="$(OutputPath)\SdkResolvers\$(AssemblyName)\$(AssemblyName).xml"
+          DestinationFolder="C:\git\msbuild\artifacts\bin\bootstrap\net472\MSBuild\Current\Bin\SdkResolvers\$(AssemblyName)"
+          SkipUnchangedFiles="true"/>
   </Target>
 
 </Project>
