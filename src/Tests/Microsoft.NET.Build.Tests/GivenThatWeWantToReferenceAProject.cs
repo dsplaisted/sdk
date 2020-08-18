@@ -56,7 +56,7 @@ namespace Microsoft.NET.Build.Tests
         [InlineData("net5.0-windows7.0", "net5.0-windows", true)]
         public void It_checks_for_valid_platform_references(string referencerTarget, string dependencyTarget, bool succeeds)
         {
-            It_checks_for_valid_references(referencerTarget, true, dependencyTarget, true, true, succeeds);
+            It_checks_for_valid_references(referencerTarget, true, dependencyTarget, true, succeeds, succeeds);
         }
 
         [Theory]
