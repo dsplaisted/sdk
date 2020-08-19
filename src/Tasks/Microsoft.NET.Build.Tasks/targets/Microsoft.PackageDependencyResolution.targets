@@ -313,7 +313,7 @@ Copyright (c) .NET Foundation. All rights reserved.
           PackageDefinitions="@(PackageDefinitions)"
           PackageDependencies="@(PackageDependencies)"
           DefaultImplicitPackages="$(DefaultImplicitPackages)"
-          TargetFrameworkMoniker="$(NuGetTargetMoniker)">
+          TargetFramework="$(TargetFramework)">
 
       <Output TaskParameter="PackageDependenciesDesignTime" ItemName="_PackageDependenciesDesignTime" />
     </PreprocessPackageDependenciesDesignTime>

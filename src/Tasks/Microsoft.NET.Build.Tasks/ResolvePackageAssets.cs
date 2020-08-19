@@ -1086,15 +1086,25 @@ namespace Microsoft.NET.Build.Tasks
             /// </summary>
             private bool CanResolveApphostFromFrameworkReference()
             {
-                var targetFramework = _lockFile.GetTarget(_targetFramework, null).TargetFramework;
-
-                if (targetFramework.Version.Major >= 3
-                    && targetFramework.Framework.Equals(".NETCoreApp", StringComparison.OrdinalIgnoreCase))
+                if (!CanWriteToCacheFile)
                 {
+                    //  If we can't write to the cache file, it's because this is a design-time build where the
+                    //  TargetFramework doesn't match what's in the assets file.  So don't try looking up the
+                    //  TargetFramework in the assets file.
                     return false;
                 }
+                else
+                { 
+                    var targetFramework = _lockFile.GetTarget(_targetFramework, null).TargetFramework;
 
-                return true;
+                    if (targetFramework.Version.Major >= 3
+                        && targetFramework.Framework.Equals(".NETCoreApp", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+
+                    return true;
+                }
             }
 
             private void WritePackageFolders()
