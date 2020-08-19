@@ -48,8 +48,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <!-- Dependencies from https://github.com/nuget/nuget.client -->
-    <!--<NuGetBuildTasksPackageVersion>5.8.0-zlocal.64614</NuGetBuildTasksPackageVersion>-->
-    <NuGetBuildTasksPackageVersion>5.8.0-preview.2.6776</NuGetBuildTasksPackageVersion>
+    <NuGetBuildTasksPackageVersion>5.8.0-zlocal.64614</NuGetBuildTasksPackageVersion>
+    <!--<NuGetBuildTasksPackageVersion>5.8.0-preview.2.6776</NuGetBuildTasksPackageVersion>-->
     <NuGetBuildTasksConsolePackageVersion>$(NuGetBuildTasksPackageVersion)</NuGetBuildTasksConsolePackageVersion>
     <NuGetBuildTasksPackPackageVersion>$(NuGetBuildTasksPackageVersion)</NuGetBuildTasksPackPackageVersion>
     <NuGetCommandLineXPlatPackageVersion>$(NuGetBuildTasksPackageVersion)</NuGetCommandLineXPlatPackageVersion>

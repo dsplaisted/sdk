@@ -45,15 +45,10 @@ namespace Microsoft.NET.Build.Tasks
         public string ProjectPath { get; set; }
 
         /// <summary>
-        /// TFM to use for compile-time assets.
+        /// TargetFramework to use for compile-time assets.
         /// </summary>
         [Required]
-        public string TargetFrameworkMoniker { get; set; }
-
-        /// <summary>
-        /// TPM to use for compile-time assets. 
-        /// </summary>
-        public string TargetPlatformMoniker { get; set; }
+        public string TargetFramework { get; set; }
 
         /// <summary>
         /// RID to use for runtime assets (may be empty)
@@ -438,8 +433,7 @@ namespace Microsoft.NET.Build.Tasks
                             writer.Write(r.ItemSpec ?? "");
                         }
                     }
-                    writer.Write(TargetFrameworkMoniker);
-                    writer.Write(TargetPlatformMoniker ?? "");
+                    writer.Write(TargetFramework);
                     writer.Write(VerifyMatchingImplicitPackageVersion);
                 }
 
@@ -640,7 +634,7 @@ namespace Microsoft.NET.Build.Tasks
             private HashSet<string> _copyLocalPackageExclusions;
             private HashSet<string> _publishPackageExclusions;
             private Placeholder _metadataStringTablePosition;
-            private NuGetFramework _targetFramework;
+            private string _targetFramework;
             private int _itemCount;
 
             public bool CanWriteToCacheFile { get; set; }
@@ -651,7 +645,7 @@ namespace Microsoft.NET.Build.Tasks
 
             public CacheWriter(ResolvePackageAssets task)
             {
-                _targetFramework = NuGetTargetFrameworkUtils.GetTargetFramework(task.TargetFrameworkMoniker, task.TargetPlatformMoniker);
+                _targetFramework = task.TargetFramework;
 
                 _task = task;
                 _lockFile = new LockFileCache(task).GetLockFile(task.ProjectAssetsFile);
@@ -1092,8 +1086,10 @@ namespace Microsoft.NET.Build.Tasks
             /// </summary>
             private bool CanResolveApphostFromFrameworkReference()
             {
-                if (_targetFramework.Version.Major >= 3
-                    && _targetFramework.Framework.Equals(".NETCoreApp", StringComparison.OrdinalIgnoreCase))
+                var targetFramework = _lockFile.GetTarget(_targetFramework, null).TargetFramework;
+
+                if (targetFramework.Version.Major >= 3
+                    && targetFramework.Framework.Equals(".NETCoreApp", StringComparison.OrdinalIgnoreCase))
                 {
                     return false;
                 }
@@ -1482,26 +1478,26 @@ namespace Microsoft.NET.Build.Tasks
         }
     }
 
-    internal static class NuGetTargetFrameworkUtils
-    {
-        public static NuGetFramework GetTargetFramework(string targetFrameworkMoniker, string targetPlatformMoniker)
-        {
-            var targetFramework = NuGetUtils.ParseFrameworkName(targetFrameworkMoniker);
-            if (targetPlatformMoniker != null && !targetPlatformMoniker.Equals(string.Empty))
-            {
-                try
-                {
-                    var targetPlatform = NuGetUtils.ParseFrameworkName(targetPlatformMoniker);
-                    var constructedFramework = new NuGetFramework(targetFramework.Framework, targetFramework.Version, targetPlatform.Framework, targetPlatform.Version);
+    //internal static class NuGetTargetFrameworkUtils
+    //{
+    //    public static NuGetFramework GetTargetFramework(string targetFrameworkMoniker, string targetPlatformMoniker)
+    //    {
+    //        var targetFramework = NuGetUtils.ParseFrameworkName(targetFrameworkMoniker);
+    //        if (targetPlatformMoniker != null && !targetPlatformMoniker.Equals(string.Empty))
+    //        {
+    //            try
+    //            {
+    //                var targetPlatform = NuGetUtils.ParseFrameworkName(targetPlatformMoniker);
+    //                var constructedFramework = new NuGetFramework(targetFramework.Framework, targetFramework.Version, targetPlatform.Framework, targetPlatform.Version);
 
-                    return constructedFramework;
-                }
-                catch
-                {
-                    return targetFramework;
-                }
-            }
-            return targetFramework;
-        }
-    }
+    //                return constructedFramework;
+    //            }
+    //            catch
+    //            {
+    //                return targetFramework;
+    //            }
+    //        }
+    //        return targetFramework;
+    //    }
+    //}
 }
