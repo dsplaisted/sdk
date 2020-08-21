@@ -10,6 +10,7 @@ using Xunit.Abstractions;
 using Microsoft.NET.TestFramework.ProjectConstruction;
 using System.IO;
 using System;
+using System.Linq;
 
 namespace Microsoft.NET.Build.Tests
 {

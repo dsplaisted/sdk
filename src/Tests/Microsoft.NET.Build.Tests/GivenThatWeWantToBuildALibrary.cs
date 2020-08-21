@@ -595,7 +595,7 @@ class Program
                 $"The TargetFramework value '{targetFramework}' was not recognized");
         }
 
-        [Theory]
+        [Theory(Skip = "https://github.com/NuGet/Home/issues/9927")]
         [InlineData(false)]
         [InlineData(true)]
         public void It_fails_gracefully_if_targetframework_should_be_targetframeworks(bool useSolution)
