@@ -36,14 +36,14 @@ namespace Microsoft.NET.Build.Tests
         {
             TestTargetFrameworkAlias(currentTargetFramework, propertySetToTrue: null, new[]
                 {
-                    "netcoreapp1.0",
-                    "netcoreapp1.1",
-                    "netcoreapp2.0",
-                    "netcoreapp2.1",
                     "netcoreapp3.0",
                     "netcoreapp3.1",
                     "net5.0-windows",
-                    "net6.0-windows"
+                    "net6.0-windows",
+                    "netstandard2.0",
+                    "netstandard2.1",
+                    "net471",
+                    "net48"
                 });
         }
 
@@ -62,33 +62,50 @@ namespace Microsoft.NET.Build.Tests
                 testProject.AdditionalProperties[propertySetToTrue] = "True";
             }
 
+            var mockSupportedTargetFramework = new List<(string targetFrameworkMoniker, string displayName)>()
+            {
+                ( ".NETCoreApp,Version=v3.0", ".NET Core 3.0"),
+                ( ".NETCoreApp,Version=v3.1", ".NET Core 3.1"),
+                ( ".NETCoreApp,Version=v5.0", ".NET 5"),
+                ( ".NETCoreApp,Version=v6.0", ".NET 6"),
+                ( ".NETStandard,Version=v2.0", ".NET Standard 2.0"),
+                ( ".NETStandard,Version=v2.1", ".NET Standard 2.1"),
+                ( ".NETFramework,Version=v4.7.1", ".NET Framework 4.7.1"),
+                ( ".NETFramework,Version=v4.8", ".NET Framework 4.8"),
+            };
+
+
             var testAsset = _testAssetsManager.CreateTestProject(testProject).WithProjectChanges(project =>
             {
                 // Replace the default SupportedTargetFramework ItemGroup with our mock items
                 var ns = project.Root.Name.Namespace;
-                //var target = new XElement(ns + "Target",
-                //    new XAttribute("Name", "OverwriteSupportedTargetFramework"),
-                //    new XAttribute("BeforeTargets", "GenerateSupportedTargetFrameworkAlias"));
+                var target = new XElement(ns + "Target",
+                    new XAttribute("Name", "OverwriteSupportedTargetFramework"),
+                    new XAttribute("BeforeTargets", "GenerateSupportedTargetFrameworkAlias"));
 
-                //project.Root.Add(target);
+                project.Root.Add(target);
 
-                //var itemGroup = new XElement(ns + "ItemGroup");
-                //target.Add(itemGroup);
+                var itemGroup = new XElement(ns + "ItemGroup");
+                target.Add(itemGroup);
 
-                //var removeAll = new XElement(ns + "SupportedTargetFramework",
-                //    new XAttribute("Remove", "@(SupportedTargetFramework)"));
-                //itemGroup.Add(removeAll);
+                var removeAll = new XElement(ns + "SupportedTargetFramework",
+                    new XAttribute("Remove", "@(SupportedTargetFramework)"));
+                itemGroup.Add(removeAll);
 
-                //  Fake support for .NET 6
-                if (NuGetFramework.Parse(targetFramework).Framework == ".NETCoreApp")
+                foreach (var tfm in mockSupportedTargetFramework)
                 {
-                    var itemGroup = new XElement(ns + "ItemGroup");
-                    project.Root.Add(itemGroup);
-
                     var mockTfm = new XElement(ns + "SupportedTargetFramework",
-                                        new XAttribute("Include", ".NETCoreApp,Version=v6.0"));
+                                        new XAttribute("Include", tfm.targetFrameworkMoniker),
+                                        new XAttribute("DisplayName", tfm.displayName));
                     itemGroup.Add(mockTfm);
                 }
+
+                //foreach (var tfm in mockSupportedTargetFramework)
+                //{
+                //    var mockTfm = new XElement(ns + "SupportedTargetFramework",
+                //                        new XAttribute("Include", tfm));
+                //    itemGroup.Add(mockTfm);
+                //}
             });
 
             var getValuesCommand = new GetValuesCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name),
@@ -102,6 +119,9 @@ namespace Microsoft.NET.Build.Tests
                 .Pass();
 
             var values = getValuesCommand.GetValues();
+            var valuesForTargetFrameworkIdentifier =
+                values.Where(v => NuGetFramework.Parse(v).Framework == NuGetFramework.Parse(targetFramework).Framework).ToList();
+            //valuesForTargetFrameworkIdentifier.ShouldBeEquivalentTo(expectedSupportedTargetFrameworkAliases);
             values.ShouldBeEquivalentTo(expectedSupportedTargetFrameworkAliases);
         }
 
