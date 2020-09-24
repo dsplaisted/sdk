@@ -38,6 +38,7 @@ namespace Microsoft.NET.Build.Tests
                 .CreateTestProject(testProject);
 
             new BuildCommand(testAsset)
+                .WithEnvironmentVariable("MSBuildEnableWorkloadResolver", "true")
                 .Execute()
                 .Should()
                 .Pass();
@@ -57,6 +58,7 @@ namespace Microsoft.NET.Build.Tests
                 .CreateTestProject(testProject);
 
             new BuildCommand(testAsset)
+                .WithEnvironmentVariable("MSBuildEnableWorkloadResolver", "true")
                 .Execute()
                 .Should()
                 .Fail()
@@ -78,7 +80,9 @@ namespace Microsoft.NET.Build.Tests
 
             var getValuesCommand = new GetValuesCommand(testAsset, "TestWorkloadAutoImportPropsImported");
 
-            getValuesCommand.Execute()
+            getValuesCommand
+                .WithEnvironmentVariable("MSBuildEnableWorkloadResolver", "true")
+                .Execute()
                 .Should()
                 .Pass();
 
