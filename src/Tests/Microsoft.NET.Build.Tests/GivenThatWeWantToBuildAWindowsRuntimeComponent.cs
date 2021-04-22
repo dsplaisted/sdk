@@ -112,8 +112,7 @@ namespace Microsoft.NET.Build.Tests
             managedWinRTComponent.AdditionalProperties.Add("CsWinRTComponent", "true");
             managedWinRTComponent.AdditionalProperties.Add("PlatformTarget", "x64");
 
-            //  TODO: Update to latest (currently 1.2.5) once it shows up on dotnet-public feed
-            managedWinRTComponent.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.3"));
+            managedWinRTComponent.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.5"));
 
             managedWinRTComponent.SourceFiles["Coords.cs"] = @"using System;
 
@@ -217,8 +216,7 @@ class Program
             projectionProject.AdditionalProperties["CsWinRTGeneratedFilesDir"] = "$(OutDir)";
             projectionProject.AdditionalProperties["CsWinRTWindowsMetadata"] = "10.0.19041.0";
 
-            //  TODO: Update to latest version
-            projectionProject.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.3"));
+            projectionProject.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.5"));
 
             //  Don't auto-generate a source file
             projectionProject.SourceFiles["Empty.cs"] = "";
@@ -244,7 +242,7 @@ class Program
             consoleApp.PackageReferences.Add(new TestPackageReference("Microsoft.VCRTForwarders.140", "1.0.6"));
 
             //  Workaround for PrivateAssets
-            consoleApp.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.3"));
+            consoleApp.PackageReferences.Add(new TestPackageReference("Microsoft.Windows.CsWinRT", "1.2.5"));
 
             consoleApp.SourceFiles["Program.cs"] = @"
 using System;
