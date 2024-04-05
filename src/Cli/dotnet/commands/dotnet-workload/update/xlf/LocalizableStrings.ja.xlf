@@ -7,6 +7,11 @@
         <target state="translated">広告マニフェストのみを更新します。</target>
         <note />
       </trans-unit>
+      <trans-unit id="CannotCombineOptions">
+        <source>Cannot use the {0} and {1} options together.</source>
+        <target state="new">Cannot use the {0} and {1} options together.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Update all installed workloads.</source>
         <target state="translated">インストールされたすべてのワークロードを更新します。</target>
@@ -20,6 +25,11 @@
       <trans-unit id="FromRollbackDefinitionOptionDescription">
         <source>Update workloads based on specified rollback definition file.</source>
         <target state="translated">指定されたロールバック定義ファイルに基づいてワークロードを更新します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoWorkloadUpdateFound">
+        <source>No workload update found.</source>
+        <target state="new">No workload update found.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoWorkloadsToUpdate">
