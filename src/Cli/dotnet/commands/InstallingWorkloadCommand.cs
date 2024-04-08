@@ -106,17 +106,27 @@ namespace Microsoft.DotNet.Workloads.Workload
             return installStateContents.UseWorkloadSets ?? false;
         }
 
-        protected void ErrorIfGlobalJsonAndCommandLineMismatch(string globaljsonPath)
-        {
-            if (!string.IsNullOrWhiteSpace(_workloadSetVersionFromGlobalJson) && !string.IsNullOrWhiteSpace(_workloadSetVersion) && !_workloadSetVersion.Equals(_workloadSetVersionFromGlobalJson))
-            {
-                throw new Exception(string.Format(Strings.CannotSpecifyVersionOnCommandLineAndInGlobalJson, globaljsonPath));
-            }
-        }
+        //protected void ErrorIfGlobalJsonAndCommandLineMismatch(string globaljsonPath)
+        //{
+        //    if (!string.IsNullOrWhiteSpace(_workloadSetVersionFromGlobalJson) && !string.IsNullOrWhiteSpace(_workloadSetVersion) && !_workloadSetVersion.Equals(_workloadSetVersionFromGlobalJson))
+        //    {
+        //        throw new Exception(string.Format(Strings.CannotSpecifyVersionOnCommandLineAndInGlobalJson, globaljsonPath));
+        //    }
+        //}
 
         protected void UpdateWorkloads(ITransactionContext context, IEnumerable<WorkloadId> workloadsToUpdateOrInstall, DirectoryPath? offlineCache)
         {
+            var globaljsonPath = SdkDirectoryWorkloadManifestProvider.GetGlobalJsonPath(Environment.CurrentDirectory);
+            _workloadSetVersionFromGlobalJson = SdkDirectoryWorkloadManifestProvider.GlobalJsonReader.GetWorkloadVersionFromGlobalJson(globaljsonPath);
+
             var useRollback = !string.IsNullOrWhiteSpace(_fromRollbackDefinition);
+
+            if (!string.IsNullOrWhiteSpace(_workloadSetVersionFromGlobalJson) &&
+                    (!string.IsNullOrWhiteSpace(_workloadSetVersion) && !_workloadSetVersion.Equals(_workloadSetVersionFromGlobalJson)) ||
+                    (useRollback))
+            {
+                throw new Exception(string.Format(Strings.CannotSpecifyVersionOnCommandLineAndInGlobalJson, globaljsonPath));
+            }
 
             bool specifiedWorkloadSetVersion = !string.IsNullOrEmpty(_workloadSetVersion);
             if (specifiedWorkloadSetVersion && useRollback)
@@ -126,7 +136,7 @@ namespace Microsoft.DotNet.Workloads.Workload
                     InstallingWorkloadCommandParser.WorkloadSetVersionOption.Name), isUserError: true);
             }
 
-            var useWorkloadSets = ShouldUseWorkloadSetMode(_sdkFeatureBand, _dotnetPath);
+            var useWorkloadSets = !string.IsNullOrEmpty(_workloadSetVersionFromGlobalJson) || ShouldUseWorkloadSetMode(_sdkFeatureBand, _dotnetPath);
             if (useRollback && useWorkloadSets)
             {
                 // Rollback files are only for loose manifests. Update the mode to be loose manifests.
