@@ -60,4 +60,11 @@
   </ItemGroup>
 
   <Import Project="build/GenerateResxSource.targets" />
+
+  <PropertyGroup>
+    <MicrosoftNETTestSdkVersion>17.9.0</MicrosoftNETTestSdkVersion>
+    <XUnitVersion>2.6.6</XUnitVersion>
+    <XUnitRunnerVisualStudioVersion>2.5.6</XUnitRunnerVisualStudioVersion>
+    <XUnitAnalyzersVersion>1.10.0</XUnitAnalyzersVersion>
+  </PropertyGroup>
 </Project>

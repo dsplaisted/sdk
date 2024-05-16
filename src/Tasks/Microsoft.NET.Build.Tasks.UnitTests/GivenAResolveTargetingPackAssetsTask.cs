@@ -197,9 +197,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
             }
             catch (ArgumentNullException)
             {
-                Assert.True(
-                    false,
-                    nameof(StronglyTypedInputs) + " is likely not correctly handling null value of one or more optional task parameters");
+                Assert.Fail(nameof(StronglyTypedInputs) + " is likely not correctly handling null value of one or more optional task parameters");
 
                 throw; // unreachable
             }
@@ -222,7 +220,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
                         break;
 
                     default:
-                        Assert.True(false, $"{property.Name} is not a bool or string or ITaskItem[]. Update the test code to handle that.");
+                        Assert.Fail($"{property.Name} is not a bool or string or ITaskItem[]. Update the test code to handle that.");
                         throw null; // unreachable
                 }
 
@@ -349,7 +347,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
                                 continue;
                             }
 
-                            Assert.True(false, $"update test to understand fields of type {subfield.PropertyType} in {nameof(FrameworkReference)}");
+                            Assert.Fail($"update test to understand fields of type {subfield.PropertyType} in {nameof(FrameworkReference)}");
                         }
                     }
                     else if (property.PropertyType == typeof(TargetingPack[]))
@@ -365,7 +363,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
                                 continue;
                             }
 
-                            Assert.True(false, $"update test to understand fields of type {subproperty.PropertyType} in {nameof(TargetingPack)}");
+                            Assert.Fail($"update test to understand fields of type {subproperty.PropertyType} in {nameof(TargetingPack)}");
                         }
                     }
                     else if (property.PropertyType == typeof(RuntimeFramework[]))
@@ -387,7 +385,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
                                 continue;
                             }
 
-                            Assert.True(false, $"update test to understand fields of type {subproperty.PropertyType} in {nameof(RuntimeFramework)}");
+                            Assert.Fail($"update test to understand fields of type {subproperty.PropertyType} in {nameof(RuntimeFramework)}");
                         }
                     }
                     else if (property.PropertyType == typeof(string))
@@ -402,7 +400,7 @@ namespace Microsoft.NET.Build.Tasks.UnitTests
                     }
                     else
                     {
-                        Assert.True(false, $"Unknown type {property.PropertyType} for field {property.Name}");
+                        Assert.Fail($"Unknown type {property.PropertyType} for field {property.Name}");
                     }
                 }
             }

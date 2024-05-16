@@ -41,7 +41,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
         public async void TemplateEngineSamplesProjectTest(
             string folderName,
             string shortName,
-            string[] arguments,
+            string[]? arguments,
             string caseDescription)
         {
             _log.LogInformation($"Template with {caseDescription}");
@@ -67,7 +67,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
 
             VerificationEngine engine = new VerificationEngine(_log);
             await engine.Execute(options)
-                .ConfigureAwait(false);
+                .ConfigureAwait(true);
         }
 
         private string GetScenarioName(string[]? args)

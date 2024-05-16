@@ -82,12 +82,12 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             //  on dev and CI runs and possibly from the version within test host. Easiest is just to scrub it away
             if (expectedTemplateName.Equals("global.json file") && args == null)
             {
-                string sdkVersionUnderTest = await new SdkInfoProvider().GetCurrentVersionAsync(default).ConfigureAwait(false);
+                string sdkVersionUnderTest = await new SdkInfoProvider().GetCurrentVersionAsync(default).ConfigureAwait(true);
                 options.CustomScrubbers?.AddScrubber(sb => sb.Replace(sdkVersionUnderTest, "%CURRENT-VER%"), "json");
             }
 
             VerificationEngine engine = new VerificationEngine(_logger);
-            await engine.Execute(options).ConfigureAwait(false);
+            await engine.Execute(options).ConfigureAwait(true);
         }
 
         //
@@ -214,7 +214,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             );
 
             VerificationEngine engine = new VerificationEngine(_logger);
-            await engine.Execute(options).ConfigureAwait(false);
+            await engine.Execute(options).ConfigureAwait(true);
 
             Directory.Delete(workingDir, true);
         }
@@ -413,7 +413,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             );
 
             VerificationEngine engine = new VerificationEngine(_logger);
-            await engine.Execute(options).ConfigureAwait(false);
+            await engine.Execute(options).ConfigureAwait(true);
 
             if (buildPass)
             {

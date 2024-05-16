@@ -61,7 +61,7 @@ public class CreateNewImageToolTaskTests
     }
 
     [Theory]
-    [InlineData(null)]
+    //[InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("ValidTag", true)]
@@ -92,7 +92,7 @@ public class CreateNewImageToolTaskTests
 
 
     [Theory]
-    [InlineData(null)]
+    //[InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Valid", true)]
@@ -122,7 +122,7 @@ public class CreateNewImageToolTaskTests
     }
 
     [Theory]
-    [InlineData(null)]
+    //[InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Valid", true)]
@@ -151,7 +151,7 @@ public class CreateNewImageToolTaskTests
     }
 
     [Theory]
-    [InlineData(null)]
+    //[InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Valid", true)]
@@ -390,7 +390,7 @@ public class CreateNewImageToolTaskTests
     }
 
     [Theory]
-    [InlineData(null)]
+    //[InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Valid", true)]

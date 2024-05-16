@@ -12,14 +12,14 @@ namespace Microsoft.DotNet.Tests
         }
 
         [Fact]
-        public void ItReturnsOnSuccess()
+        public async Task ItReturnsOnSuccess()
         {
             var retryCount = 0;
             Func<Task<string>> action = () => {
                 retryCount++;
                 return Task.FromResult("done");
             };
-            var res = ExponentialRetry.ExecuteWithRetryOnFailure<string>(action).Result;
+            var res = await ExponentialRetry.ExecuteWithRetryOnFailure<string>(action);
 
             retryCount.Should().Be(1);
         }
