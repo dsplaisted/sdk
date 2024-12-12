@@ -68,4 +68,7 @@ The targeting packs for all the different major versions of .NET would also be i
 - How can the targeting pack or versions in it be overridden for internal flow
 - Targeting pack versioning for previews
 - How do we pin?  Do we need another piece of data in global.json?  All the time?
+- How do we get consistent version of the targeting packs for a given SDK version
 - How much does this actually help if it doesn't address workload cross-version flow?
+- Get rid of commands to install / update targeting packs, but require down-level SDK to be installed?
+- Do we need to update pruned package versions every month or can we just prune based on major version and ignore patches (and update conflict resolution too)
