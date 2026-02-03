@@ -76,6 +76,7 @@ namespace Microsoft.DotNet.NativeWrapper
             {
                 var pointer = new IntPtr(infoStruct.sdks.ToInt64() + i * Marshal.SizeOf<hostfxr_dotnet_environment_sdk_info>());
                 sdks[i] = Marshal.PtrToStructure<hostfxr_dotnet_environment_sdk_info>(pointer);
+                Console.WriteLine($"SDK Info: version={sdks[i].version}, path={sdks[i].path}");
             }
             SdkInfo = sdks.Select(sdk => new NetSdkInfo(sdk.version, sdk.path));
         }

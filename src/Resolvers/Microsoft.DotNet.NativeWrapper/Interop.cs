@@ -54,8 +54,10 @@ namespace Microsoft.DotNet.NativeWrapper
                 throw new HostFxrRuntimePropertyNotSetException();
             }
 
+            Console.WriteLine($"Trying to load hostfxr from: {HostFxrPath}");
             if (!NativeLibrary.TryLoad(HostFxrPath, out var handle))
             {
+                Console.WriteLine("Failed to load hostfxr library.");
                 throw new HostFxrNotFoundException(HostFxrPath);
             }
 

@@ -61,6 +61,7 @@ namespace Microsoft.Dotnet.Installation.Internal
         private static void PreloadHostFxrLibrary(string dotnetExeDirectory)
         {
             string? hostFxrPath = FindHostFxrLibrary(dotnetExeDirectory);
+            Console.WriteLine($"Preloading hostfxr from: {hostFxrPath}");
             if (hostFxrPath != null)
             {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
