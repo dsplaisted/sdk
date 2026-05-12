@@ -537,15 +537,24 @@
     </PropertyGroup>
 
     <!--
-      Publish via Exec in a separate process to avoid BuildManager caching/scheduling
-      interference in CI's multi-node parallel build context.
-      
-      The dotnet-aot project declares RuntimeIdentifier=$(TargetRid) so that centralized
-      NuGet restore (via sdk.slnx) generates the RID-specific target in project.assets.json.
-      Restore is skipped here since the initial restore is sufficient.
+      Publish in-process via the MSBuild task so this participates in the outer build's
+      project graph and BuildManager cache.
+
+      The dotnet-aot project declares RuntimeIdentifier=$(TargetRid), so the centralized
+      restore (via sdk.slnx) already generates the RID-specific target in
+      project.assets.json — no separate Restore call is required here.
+
+      Do NOT Exec a child 'dotnet publish' process: a child process does not inherit the
+      outer build's MSBuild global properties (Arcade / source-build flags, DebugType,
+      signing, version overrides, etc.) and would rebuild this project's ProjectReferences
+      from scratch, clobbering outputs the outer build had already produced. That caused
+      NU5026 (missing Microsoft.DotNet.Cli.Utils.pdb) in dotnet-unified-build internal
+      verticals (see dnceng/internal build 2972531 / dotnet/dotnet#6524).
     -->
-    <Exec Command="&quot;$(DotNetTool)&quot; publish &quot;$(RepoRoot)src/Cli/dotnet-aot/dotnet-aot.csproj&quot; --no-restore -c $(Configuration) -r $(TargetRid) -o &quot;$(_DotnetAotPublishDir)&quot;"
-          IgnoreStandardErrorWarningFormat="true" />
+    <MSBuild
+      Targets="Publish"
+      Projects="$(RepoRoot)src/Cli/dotnet-aot/dotnet-aot.csproj"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=$(TargetRid);PublishDir=$(_DotnetAotPublishDir)" />
 
     <!-- Verify the native library was produced -->
     <Error Condition="!Exists('$(_DotnetAotPublishDir)$(_DotnetAotNativeLibName)')"
