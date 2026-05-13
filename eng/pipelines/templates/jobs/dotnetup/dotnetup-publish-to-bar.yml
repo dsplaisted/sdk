@@ -48,15 +48,13 @@ jobs:
   timeoutInMinutes: 30
   templateContext:
     outputs:
+    # AssetManifests can be a pipeline artifact — only this job writes to it; the
+    # publish-build-assets job downloads it via DownloadPipelineArtifact and never
+    # writes back to the same name.
     - output: pipelineArtifact
       displayName: 'Publish AssetManifests'
       targetPath: $(Build.StagingDirectory)/AssetManifests
       artifactName: AssetManifests
-      publishLocation: Container
-    - output: pipelineArtifact
-      displayName: 'Publish BlobArtifacts'
-      targetPath: $(Build.StagingDirectory)/BlobArtifacts
-      artifactName: BlobArtifacts
       publishLocation: Container
 
   steps:
@@ -166,6 +164,19 @@ jobs:
       Write-Host "===== BlobArtifacts layout ====="
       Get-ChildItem -Recurse $blobBase | Select-Object FullName, Length
     displayName: 🛠 Generate asset manifest and lay out BlobArtifacts
+
+  # PublishBuildToMaestro (called by publish-build-assets.yml below) writes its
+  # MergedManifest.xml and uploads it to the "BlobArtifacts" name via the legacy
+  # `##vso[artifact.upload]` logging command. AzDO does not allow merging a legacy
+  # build artifact with a pipeline artifact under the same name, so we have to use
+  # the legacy 1ES.PublishBuildArtifacts@1 task here (rather than declaring this
+  # as a `pipelineArtifact` in `templateContext.outputs`) so Arcade's append works.
+  - task: 1ES.PublishBuildArtifacts@1
+    displayName: 'Publish BlobArtifacts (build artifact)'
+    inputs:
+      PathtoPublish: $(Build.StagingDirectory)/BlobArtifacts
+      ArtifactName: BlobArtifacts
+      PublishLocation: Container
 
 # ---------------------------------------------------------------------------
 # publish_to_bar (the standard Arcade publish-build-assets job)
