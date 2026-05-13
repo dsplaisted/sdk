@@ -7,7 +7,8 @@ parameters:
     templateFolderName: templates
     publishTaskPrefix: ''
   # Maps to <Blob Id="..." /> entries in the manifest. The id is the path inside the
-  # target storage container; we pick a layout under dotnetup/<BuildNumber>/.
+  # target storage container; we pick a layout under dotnetup/<SemVer>/ where SemVer
+  # comes from the published dotnetup.version.txt file.
   rids:
   - rid: win-x64
     isWindows: true
@@ -31,7 +32,7 @@ jobs:
 # stage_for_bar
 #
 # Collect all per-RID dotnetup standalone binaries (and their .sha512 siblings)
-# from the executable stages, lay them out under "dotnetup/<BuildNumber>/<asset>",
+# from the executable stages, lay them out under "dotnetup/<SemVer>/<asset>",
 # hand-craft an asset manifest XML in the format the Build Asset Registry expects,
 # and publish two pipeline artifacts:
 #
@@ -70,10 +71,20 @@ jobs:
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
-      $version    = '$(Build.BuildNumber)'
-      $blobBase   = Join-Path '$(Build.StagingDirectory)' 'BlobArtifacts'
-      $assetBase  = Join-Path '$(Build.StagingDirectory)' 'AssetManifests'
-      $assetsRoot = Join-Path $blobBase ("dotnetup/" + $version)
+      # Read the SemVer from dotnetup.version.txt, which the publish step emitted to the
+      # standalone artifact. WriteDotnetupVersionFile (in dotnetup.csproj) writes $(Version),
+      # which Arcade SDK has already composed as <prefix>-<label>.<BuildId> with the right
+      # patch/iteration numbers.
+      $versionFile = Join-Path '$(Pipeline.Workspace)' 'standalone/win-x64/dotnetup.version.txt'
+      if (-not (Test-Path $versionFile)) { throw "Missing version file: $versionFile" }
+      $semver = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+      if ([string]::IsNullOrWhiteSpace($semver)) { throw "Empty version in $versionFile" }
+      Write-Host "Using SemVer: $semver"
+
+      $buildNumber = '$(Build.BuildNumber)'
+      $blobBase    = Join-Path '$(Build.StagingDirectory)' 'BlobArtifacts'
+      $assetBase   = Join-Path '$(Build.StagingDirectory)' 'AssetManifests'
+      $assetsRoot  = Join-Path $blobBase ("dotnetup/" + $semver)
 
       New-Item -ItemType Directory -Path $assetsRoot -Force | Out-Null
       New-Item -ItemType Directory -Path $assetBase  -Force | Out-Null
@@ -101,8 +112,8 @@ jobs:
         Copy-Item -LiteralPath $src  -Destination (Join-Path $assetsRoot $r.targetName)
         Copy-Item -LiteralPath $hash -Destination (Join-Path $assetsRoot ($r.targetName + '.sha512'))
 
-        $blobIds.Add("dotnetup/$version/" + $r.targetName)
-        $blobIds.Add("dotnetup/$version/" + $r.targetName + '.sha512')
+        $blobIds.Add("dotnetup/$semver/" + $r.targetName)
+        $blobIds.Add("dotnetup/$semver/" + $r.targetName + '.sha512')
       }
 
       # Compose the asset manifest XML. The attribute set mirrors what Arcade's
@@ -121,8 +132,8 @@ jobs:
         # the dotnet/sdk repo record; eng-services queries on the SDK repo will see this
         # build alongside main SDK builds, distinguished by AzureDevOpsBuildNumber.)
         $writer.WriteAttributeString('Name', 'dotnet/sdk')
-        $writer.WriteAttributeString('BuildId', $version)
-        $writer.WriteAttributeString('ProductVersion', $version)
+        $writer.WriteAttributeString('BuildId', $buildNumber)
+        $writer.WriteAttributeString('ProductVersion', $semver)
         $writer.WriteAttributeString('Branch', '$(Build.SourceBranch)')
         $writer.WriteAttributeString('Commit', '$(Build.SourceVersion)')
         $writer.WriteAttributeString('AzureDevOpsRepository', '$(Build.Repository.Uri)')
