@@ -1,0 +1,170 @@
+parameters:
+  # Pool to run the staging job on. The actual blob upload is performed by the shared
+  # Maestro Promotion Pipeline (dnceng/internal #750) which uses its own pool; we just
+  # need a normal Windows agent here to download artifacts and emit the manifest.
+  pool: {}
+  oneESCompat:
+    templateFolderName: templates
+    publishTaskPrefix: ''
+  # Maps to <Blob Id="..." /> entries in the manifest. The id is the path inside the
+  # target storage container; we pick a layout under dotnetup/<BuildNumber>/.
+  rids:
+  - rid: win-x64
+    isWindows: true
+  - rid: win-arm64
+    isWindows: true
+  - rid: linux-x64
+    isWindows: false
+  - rid: linux-arm64
+    isWindows: false
+  - rid: linux-musl-x64
+    isWindows: false
+  - rid: linux-musl-arm64
+    isWindows: false
+  - rid: osx-x64
+    isWindows: false
+  - rid: osx-arm64
+    isWindows: false
+
+jobs:
+# ---------------------------------------------------------------------------
+# stage_for_bar
+#
+# Collect all per-RID dotnetup standalone binaries (and their .sha512 siblings)
+# from the executable stages, lay them out under "dotnetup/<BuildNumber>/<asset>",
+# hand-craft an asset manifest XML in the format the Build Asset Registry expects,
+# and publish two pipeline artifacts:
+#
+#  AssetManifests/  -> read by publish-build-assets.yml to register with BAR
+#  BlobArtifacts/   -> read by the Maestro Promotion Pipeline (#750) to upload
+#
+# Both contain a copy of MergedManifest.xml; BlobArtifacts also contains the
+# binaries laid out at the paths declared in the manifest.
+# ---------------------------------------------------------------------------
+- job: stage_for_bar
+  displayName: 📦 Stage dotnetup artifacts for BAR
+  pool: ${{ parameters.pool }}
+  timeoutInMinutes: 30
+  templateContext:
+    outputs:
+    - output: pipelineArtifact
+      displayName: 'Publish AssetManifests'
+      targetPath: $(Build.StagingDirectory)/AssetManifests
+      artifactName: AssetManifests
+      publishLocation: Container
+    - output: pipelineArtifact
+      displayName: 'Publish BlobArtifacts'
+      targetPath: $(Build.StagingDirectory)/BlobArtifacts
+      artifactName: BlobArtifacts
+      publishLocation: Container
+
+  steps:
+  - checkout: none
+
+  - ${{ each entry in parameters.rids }}:
+    - task: DownloadPipelineArtifact@2
+      displayName: Download dotnetup-standalone-${{ entry.rid }}
+      inputs:
+        artifact: dotnetup-standalone-${{ entry.rid }}
+        path: $(Pipeline.Workspace)/standalone/${{ entry.rid }}
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $version    = '$(Build.BuildNumber)'
+      $blobBase   = Join-Path '$(Build.StagingDirectory)' 'BlobArtifacts'
+      $assetBase  = Join-Path '$(Build.StagingDirectory)' 'AssetManifests'
+      $assetsRoot = Join-Path $blobBase ("dotnetup/" + $version)
+
+      New-Item -ItemType Directory -Path $assetsRoot -Force | Out-Null
+      New-Item -ItemType Directory -Path $assetBase  -Force | Out-Null
+
+      # Map RIDs to source filenames and target filenames (RID-suffixed).
+      $rids = @(
+        @{ rid='win-x64';        sourceName='dotnetup.exe'; targetName='dotnetup-win-x64.exe' },
+        @{ rid='win-arm64';      sourceName='dotnetup.exe'; targetName='dotnetup-win-arm64.exe' },
+        @{ rid='linux-x64';      sourceName='dotnetup';     targetName='dotnetup-linux-x64' },
+        @{ rid='linux-arm64';    sourceName='dotnetup';     targetName='dotnetup-linux-arm64' },
+        @{ rid='linux-musl-x64'; sourceName='dotnetup';     targetName='dotnetup-linux-musl-x64' },
+        @{ rid='linux-musl-arm64';sourceName='dotnetup';    targetName='dotnetup-linux-musl-arm64' },
+        @{ rid='osx-x64';        sourceName='dotnetup';     targetName='dotnetup-osx-x64' },
+        @{ rid='osx-arm64';      sourceName='dotnetup';     targetName='dotnetup-osx-arm64' }
+      )
+
+      $blobIds = New-Object System.Collections.Generic.List[string]
+      foreach ($r in $rids) {
+        $srcDir = Join-Path '$(Pipeline.Workspace)' ("standalone/" + $r.rid)
+        $src    = Join-Path $srcDir $r.sourceName
+        $hash   = Join-Path $srcDir ($r.sourceName + '.sha512')
+        if (-not (Test-Path $src))  { throw "Missing binary: $src" }
+        if (-not (Test-Path $hash)) { throw "Missing checksum: $hash" }
+
+        Copy-Item -LiteralPath $src  -Destination (Join-Path $assetsRoot $r.targetName)
+        Copy-Item -LiteralPath $hash -Destination (Join-Path $assetsRoot ($r.targetName + '.sha512'))
+
+        $blobIds.Add("dotnetup/$version/" + $r.targetName)
+        $blobIds.Add("dotnetup/$version/" + $r.targetName + '.sha512')
+      }
+
+      # Compose the asset manifest XML. The attribute set mirrors what Arcade's
+      # PushToBuildStorage task emits when authored from source; PublishBuildAssets
+      # only requires a subset (Name, PublishingVersion, AzureDevOps* identity).
+      $manifestPath = Join-Path $blobBase 'MergedManifest.xml'
+      $xml = [System.Xml.XmlWriterSettings]@{ Indent = $true; OmitXmlDeclaration = $false }
+      $writer = [System.Xml.XmlWriter]::Create($manifestPath, $xml)
+      try {
+        $writer.WriteStartDocument()
+        $writer.WriteStartElement('Build')
+        $writer.WriteAttributeString('PublishingVersion', '3')
+        # Name is the GitHub repository identifier — BAR keys subscriptions, default-channel
+        # mappings, and queries on this value as https://github.com/<Name>. dotnetup builds
+        # out of dotnet/sdk so we use that identifier. (BAR will associate this build with
+        # the dotnet/sdk repo record; eng-services queries on the SDK repo will see this
+        # build alongside main SDK builds, distinguished by AzureDevOpsBuildNumber.)
+        $writer.WriteAttributeString('Name', 'dotnet/sdk')
+        $writer.WriteAttributeString('BuildId', $version)
+        $writer.WriteAttributeString('ProductVersion', $version)
+        $writer.WriteAttributeString('Branch', '$(Build.SourceBranch)')
+        $writer.WriteAttributeString('Commit', '$(Build.SourceVersion)')
+        $writer.WriteAttributeString('AzureDevOpsRepository', '$(Build.Repository.Uri)')
+        $writer.WriteAttributeString('AzureDevOpsBranch', '$(Build.SourceBranch)')
+        $writer.WriteAttributeString('AzureDevOpsBuildNumber', '$(Build.BuildNumber)')
+        $writer.WriteAttributeString('AzureDevOpsAccount', 'dnceng')
+        $writer.WriteAttributeString('AzureDevOpsProject', 'internal')
+        $writer.WriteAttributeString('AzureDevOpsBuildDefinitionId', '$(System.DefinitionId)')
+        $writer.WriteAttributeString('AzureDevOpsBuildId', '$(Build.BuildId)')
+        $writer.WriteAttributeString('InitialAssetsLocation', 'https://dotnetbuilds.blob.core.windows.net/public')
+        $writer.WriteAttributeString('IsStable', 'false')
+        $writer.WriteAttributeString('IsReleaseOnlyPackageVersion', 'false')
+        foreach ($id in $blobIds) {
+          $writer.WriteStartElement('Blob')
+          $writer.WriteAttributeString('Id', $id)
+          $writer.WriteEndElement()
+        }
+        $writer.WriteEndElement()
+        $writer.WriteEndDocument()
+      } finally {
+        $writer.Dispose()
+      }
+
+      # The promotion pipeline expects the manifest inside BlobArtifacts/.
+      # publish-build-assets.yml expects it inside AssetManifests/. Copy to both.
+      Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $assetBase 'MergedManifest.xml') -Force
+
+      Write-Host "===== Manifest ====="
+      Get-Content $manifestPath
+      Write-Host "===== BlobArtifacts layout ====="
+      Get-ChildItem -Recurse $blobBase | Select-Object FullName, Length
+    displayName: 🛠 Generate asset manifest and lay out BlobArtifacts
+
+# ---------------------------------------------------------------------------
+# publish_to_bar (the standard Arcade publish-build-assets job)
+# Reads AssetManifests, registers the build in BAR via Maestro, and produces
+# a BARBuildId. After the build completes, manually promote with:
+#   darc add-build-to-channel --id <BARBuildId> --channel <ChannelName>
+# ---------------------------------------------------------------------------
+- template: /eng/common/${{ parameters.oneESCompat.templateFolderName }}/job/publish-build-assets.yml@self
+  parameters:
+    publishingVersion: 3
+    publishAssetsImmediately: false
+    dependsOn: stage_for_bar
+    pool: ${{ parameters.pool }}

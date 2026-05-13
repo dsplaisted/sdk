@@ -345,3 +345,31 @@ extends:
             oneESCompat:
               templateFolderName: templates-official
               publishTaskPrefix: 1ES.
+
+      ############### BAR experiment ###############
+      # Stages the per-RID standalone binaries into a single manifest + BlobArtifacts
+      # layout and registers the build with the Build Asset Registry. Does NOT
+      # auto-promote to a channel — that is a manual `darc add-build-to-channel`
+      # step after the build completes. See dotnetup-publish-to-bar.yml.
+      - stage: publish_to_bar
+        displayName: 📦 Register dotnetup with BAR
+        dependsOn:
+        - executable_win_x64
+        - executable_win_arm64
+        - executable_linux_x64
+        - executable_linux_arm64
+        - executable_linux_musl_x64
+        - executable_linux_musl_arm64
+        - executable_osx_x64
+        - executable_osx_arm64
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual'))
+        jobs:
+        - template: /eng/pipelines/templates/jobs/dotnetup/dotnetup-publish-to-bar.yml@self
+          parameters:
+            pool:
+              name: $(DncEngInternalBuildPool)
+              image: 1es-windows-2022
+              os: windows
+            oneESCompat:
+              templateFolderName: templates-official
+              publishTaskPrefix: 1ES.
