@@ -18,6 +18,7 @@ using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Install;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Uninstall;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Update;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Init;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.Init.Form;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper;
 
@@ -64,6 +65,7 @@ internal class Parser
         rootCommand.Subcommands.Add(ListCommandParser.GetCommand());
         rootCommand.Subcommands.Add(DotnetCommandParser.GetCommand());
         rootCommand.Subcommands.Add(InitCommandParser.GetCommand());
+        rootCommand.Subcommands.Add(InitFormCommandParser.GetCommand());
 
         // Bare `dotnetup` routes to SdkInstallCommand. Register --interactive on the root
         // so that ParseResult.GetValue(InteractiveOption) finds the option bound to the
