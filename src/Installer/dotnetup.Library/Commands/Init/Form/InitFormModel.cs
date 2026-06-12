@@ -129,12 +129,13 @@ internal sealed class InitFormModel
         var channel = new FormField(
             "SDK Channel",
             [
-                new FieldChoice("latest", "Newest released SDK"),
-                new FieldChoice("10.0", "Latest .NET 10.0 SDK"),
-                new FieldChoice("10.0.1xx", "Newest patch of the 10.0.1xx band"),
-                new FieldChoice("9.0", "Latest .NET 9.0 SDK"),
-                new FieldChoice("preview / daily", "Newest in-development build"),
-                new FieldChoice("custom…", "Type your own, e.g. 8.0.4xx", IsCustomInput: true),
+                new FieldChoice("latest", "The latest released SDK"),
+                new FieldChoice("preview", "The latest preview SDK"),
+                new FieldChoice("daily", "The latest daily build"),
+                new FieldChoice("10.0", "The latest 10.0 SDK"),
+                new FieldChoice("10.0.1xx", "The latest 10.0.1xx patch"),
+                new FieldChoice("9.0", "The latest 9.0 SDK"),
+                new FieldChoice("<other>", "Type your own, e.g. 8.0.4xx", IsCustomInput: true),
             ],
             defaultIndex: 0,
             inlineHelp: true);
@@ -144,7 +145,7 @@ internal sealed class InitFormModel
             "Mode",
             [
                 new FieldChoice("Isolation", "Keep dotnetup's .NET fully self-contained; nothing is added to PATH. You invoke it explicitly. Safest option if you manage multiple .NET installs yourself."),
-                new FieldChoice("Terminal Profile (recommended)", "Adds dotnetup's .NET to your shell profile's PATH so `dotnet` resolves to it in new terminals. A good balance of convenience and isolation; doesn't touch system-wide settings."),
+                new FieldChoice("Terminal Profile (recommended)", "Adds dotnetup's .NET to your PowerShell profile's PATH so `dotnet` resolves to it in new terminals. A good balance of convenience and isolation; doesn't touch system-wide settings."),
                 new FieldChoice("Replacement", "Make dotnetup's .NET the machine's primary `dotnet`. Most seamless, but overrides any existing system-wide .NET on PATH."),
             ],
             defaultIndex: ModeTerminalProfileIndex);
@@ -152,7 +153,7 @@ internal sealed class InitFormModel
         var migrate = new FormField(
             "Migrate system installs",
             [
-                new FieldChoice("Yes", "Move .NET SDKs and runtimes from your existing system-wide install under dotnetup's management so they're updated and cleaned up together."),
+                new FieldChoice("Yes", "Copy .NET SDKs and runtimes from your existing system-wide install under dotnetup's management so they're updated and cleaned up together."),
                 new FieldChoice("No", "Leave existing system-wide .NET installs untouched. dotnetup manages only what it installs."),
             ],
             defaultIndex: 0);
@@ -163,8 +164,8 @@ internal sealed class InitFormModel
             fields: [channel, mode, migrate],
             modeField: mode,
             migrateField: migrate,
-            installPath: "~/.dotnet",
-            profilePath: "~/.bashrc",
+            installPath: Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\.dotnet"),
+            profilePath: Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"),
             sdkVersions: ["10.0.105", "9.0.403", "9.0.112", "8.0.324", "8.0.118", "7.0.410", "6.0.428"],
             runtimeVersions: ["10.0.5", "9.0.12", "8.0.20", "8.0.18", "7.0.20", "6.0.36"]);
     }

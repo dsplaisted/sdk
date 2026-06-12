@@ -155,16 +155,15 @@ public class FormSelectorStateTests
     ];
 
     [Fact]
-    public void Enter_OnCustomChoice_OpensTextEntry()
+    public void HighlightingCustomChoice_MakesItLiveForTyping()
     {
         var state = new FormSelectorState(FieldsWithCustom());
         state.MoveUp();   // focus the field
-        state.Enter();    // edit
+        state.Enter();    // edit (highlight starts at choice 0)
         state.MoveDown(); // highlight the custom choice
 
-        state.Enter();
-
-        state.Mode.Should().Be(FormMode.EditingCustomText);
+        state.Mode.Should().Be(FormMode.EditingField);
+        state.IsCustomChoiceHighlighted.Should().BeTrue();
         state.CustomTextBuffer.Should().BeEmpty();
     }
 
@@ -175,8 +174,7 @@ public class FormSelectorStateTests
         var state = new FormSelectorState(fields);
         state.MoveUp();
         state.Enter();
-        state.MoveDown();
-        state.Enter(); // text entry
+        state.MoveDown(); // highlight custom (now live)
 
         state.AppendChar('8');
         state.AppendChar('.');
@@ -192,37 +190,70 @@ public class FormSelectorStateTests
     }
 
     [Fact]
-    public void EmptyEnter_InTextEntry_ReturnsToChoiceList()
+    public void EnterWithEmptyCustomText_KeepsFieldOpen()
     {
         var fields = FieldsWithCustom();
         var state = new FormSelectorState(fields);
         state.MoveUp();
         state.Enter();
-        state.MoveDown();
-        state.Enter(); // text entry
+        state.MoveDown(); // highlight custom, nothing typed
 
-        state.Enter(); // nothing typed
+        state.Enter();
 
         state.Mode.Should().Be(FormMode.EditingField);
         fields[0].CustomValue.Should().BeNull();
     }
 
     [Fact]
-    public void Cancel_InTextEntry_ReturnsToChoiceList_WithoutCommitting()
+    public void Escape_RevertsCustomTextToValueWhenFieldWasOpened()
+    {
+        var fields = FieldsWithCustom();
+        fields[0].SetCustomValue(1, "8.0"); // committed; LastCustomText = "8.0"
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();        // open field (snapshot "8.0"); custom highlighted, buffer "8.0"
+        state.AppendChar('x'); // edit to "8.0x"
+
+        state.Cancel();       // Esc
+
+        state.Mode.Should().Be(FormMode.Form);
+        fields[0].LastCustomText.Should().Be("8.0"); // reverted, not "8.0x"
+    }
+
+    [Fact]
+    public void MovingOffCustom_SavesTypedText_WithoutEnter()
     {
         var fields = FieldsWithCustom();
         var state = new FormSelectorState(fields);
         state.MoveUp();
         state.Enter();
-        state.MoveDown();
-        state.Enter();
-        state.AppendChar('x');
+        state.MoveDown(); // highlight custom
+        state.AppendChar('9');
+        state.AppendChar('.');
+        state.AppendChar('0');
 
-        state.Cancel();
+        state.MoveUp();   // move off without Enter
 
-        state.Mode.Should().Be(FormMode.EditingField);
-        state.CustomTextBuffer.Should().BeEmpty();
-        fields[0].CustomValue.Should().BeNull();
+        fields[0].LastCustomText.Should().Be("9.0"); // saved
+        state.MoveDown(); // back to custom
+        state.CustomTextBuffer.Should().Be("9.0");   // restored
+    }
+
+    [Fact]
+    public void DeletingCustomText_ThenMoveOff_ReturnsToInitialState()
+    {
+        var fields = FieldsWithCustom();
+        fields[0].SetCustomValue(1, "8.0"); // had a value; LastCustomText "8.0"
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();    // custom highlighted, buffer "8.0"
+        state.Backspace();
+        state.Backspace();
+        state.Backspace(); // buffer now empty
+
+        state.MoveUp();    // move off
+
+        fields[0].LastCustomText.Should().BeEmpty(); // cleared -> initial placeholder state
     }
 
     [Fact]
@@ -239,5 +270,51 @@ public class FormSelectorStateTests
         fields[0].SelectedIndex.Should().Be(0);
         fields[0].CustomValue.Should().BeNull();
         fields[0].DisplayValue.Should().Be("a");
+    }
+
+    [Fact]
+    public void ReEditingCommittedCustom_SeedsBufferWithThatValue()
+    {
+        var fields = FieldsWithCustom();
+        fields[0].SetCustomValue(1, "8.1");
+        var state = new FormSelectorState(fields);
+        state.MoveUp();  // focus field
+        state.Enter();   // edit; highlight = custom (current selection), buffer seeded
+
+        state.IsCustomChoiceHighlighted.Should().BeTrue();
+        state.CustomTextBuffer.Should().Be("8.1");
+    }
+
+    [Fact]
+    public void ArrowWhileTyping_RemembersText_AndNavigates()
+    {
+        var fields = FieldsWithCustom();
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();
+        state.MoveDown(); // highlight custom (live)
+        state.AppendChar('8');
+
+        state.MoveUp();   // arrow away while typing
+
+        state.EditChoiceIndex.Should().Be(0);
+        state.CustomTextBuffer.Should().BeEmpty(); // buffer cleared off the custom choice
+        fields[0].LastCustomText.Should().Be("8"); // but remembered
+    }
+
+    [Fact]
+    public void ReturningToCustomAfterTyping_RestoresRememberedText()
+    {
+        var fields = FieldsWithCustom();
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();
+        state.MoveDown(); // custom
+        state.AppendChar('8');
+        state.AppendChar('.');
+        state.MoveUp();   // arrow away (remembers "8.")
+        state.MoveDown(); // back to custom
+
+        state.CustomTextBuffer.Should().Be("8.");
     }
 }

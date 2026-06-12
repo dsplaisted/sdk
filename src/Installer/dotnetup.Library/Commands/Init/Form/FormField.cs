@@ -52,6 +52,12 @@ internal sealed class FormField
     /// </summary>
     public string? CustomValue { get; private set; }
 
+    /// <summary>
+    /// The most recently typed custom text, remembered even when a fixed value is currently selected
+    /// so re-opening the custom input restores what the user last typed.
+    /// </summary>
+    public string LastCustomText { get; private set; } = string.Empty;
+
     /// <summary>The currently selected value's choice.</summary>
     public FieldChoice Selected => Choices[SelectedIndex];
 
@@ -73,5 +79,15 @@ internal sealed class FormField
     {
         SelectedIndex = customChoiceIndex;
         CustomValue = value;
+        LastCustomText = value;
+    }
+
+    /// <summary>
+    /// Sets the remembered custom text (the content of the custom-input choice). Setting it to an
+    /// empty string clears it, returning the choice to its initial placeholder state.
+    /// </summary>
+    public void RememberCustomText(string value)
+    {
+        LastCustomText = value;
     }
 }

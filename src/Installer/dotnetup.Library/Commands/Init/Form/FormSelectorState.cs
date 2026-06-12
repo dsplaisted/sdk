@@ -11,18 +11,18 @@ internal enum FormMode
     /// <summary>Browsing the collapsed form: navigation moves between fields and the Accept row.</summary>
     Form,
 
-    /// <summary>A field is expanded: navigation moves between that field's choices.</summary>
+    /// <summary>A field is expanded: navigation moves between its choices, Enter commits one.</summary>
     EditingField,
-
-    /// <summary>Typing a free-text value for a custom-input choice (e.g. a custom channel).</summary>
-    EditingCustomText,
 }
 
 /// <summary>
 /// Pure, console-free state machine for the init form selector. Owns the focus/edit state and the
-/// transitions for arrow navigation, entering/committing/cancelling a field edit, typing a custom
-/// value, and accepting the form. Kept separate from the Spectre rendering so the behavior is
-/// unit-testable.
+/// transitions for arrow navigation, committing a choice, typing into a custom-input choice, and
+/// accepting the form. Kept separate from the Spectre rendering so the behavior is unit-testable.
+///
+/// A custom-input choice is "live" whenever it is highlighted: typing edits its text buffer in
+/// place and Enter commits the field to that text (just like committing any fixed choice). Moving
+/// off it remembers the typed text so returning restores it.
 ///
 /// Row layout (Form mode): rows <c>0..Fields.Count-1</c> are the fields; the final row
 /// (<c>Fields.Count</c>) is the Accept action, which is the initial focus so a single Enter accepts.
@@ -59,8 +59,12 @@ internal sealed class FormSelectorState
     /// <summary>The choice index highlighted while editing a field; otherwise -1.</summary>
     public int EditChoiceIndex { get; private set; } = -1;
 
-    /// <summary>The in-progress text typed for a custom-input choice (valid in EditingCustomText).</summary>
+    /// <summary>The live text for a highlighted custom-input choice; empty otherwise.</summary>
     public string CustomTextBuffer { get; private set; } = string.Empty;
+
+    // The edited field's remembered custom text captured when the field was opened, so Esc can
+    // revert to it (arrowing between choices saves; only Esc cancels).
+    private string _customTextAtEditStart = string.Empty;
 
     /// <summary>True once the user accepted the form; the input loop should stop.</summary>
     public bool IsDone { get; private set; }
@@ -80,19 +84,6 @@ internal sealed class FormSelectorState
         && EditChoiceIndex < focused.Choices.Count
         && focused.Choices[EditChoiceIndex].IsCustomInput;
 
-    /// <summary>
-    /// Switches a highlighted custom-input choice into text-entry mode so the user can start typing
-    /// immediately (without first pressing Enter). No-op if the highlighted choice isn't custom.
-    /// </summary>
-    public void BeginCustomText()
-    {
-        if (IsCustomChoiceHighlighted)
-        {
-            CustomTextBuffer = _fields[FocusedRow].CustomValue ?? string.Empty;
-            Mode = FormMode.EditingCustomText;
-        }
-    }
-
     /// <summary>Moves focus to the previous row (Form) or previous choice (Editing). Clamps at the top.</summary>
     public void MoveUp()
     {
@@ -103,9 +94,11 @@ internal sealed class FormSelectorState
                 FocusedRow--;
             }
         }
-        else if (Mode == FormMode.EditingField && EditChoiceIndex > 0)
+        else if (EditChoiceIndex > 0)
         {
+            RememberCurrentCustomText();
             EditChoiceIndex--;
+            SeedCurrentCustomText();
         }
     }
 
@@ -119,65 +112,58 @@ internal sealed class FormSelectorState
                 FocusedRow++;
             }
         }
-        else if (Mode == FormMode.EditingField && EditChoiceIndex < _fields[FocusedRow].Choices.Count - 1)
+        else if (EditChoiceIndex < _fields[FocusedRow].Choices.Count - 1)
         {
+            RememberCurrentCustomText();
             EditChoiceIndex++;
+            SeedCurrentCustomText();
         }
     }
 
     /// <summary>
     /// Enter: Form mode opens the focused field or accepts when Accept is focused; EditingField
-    /// commits the highlighted choice (or opens text entry for a custom-input choice); EditingCustomText
-    /// commits the typed value (or returns to the choice list when the text is empty).
+    /// commits the highlighted choice — for a custom-input choice that means committing the typed
+    /// text (ignored when empty).
     /// </summary>
     public void Enter()
     {
-        switch (Mode)
+        if (Mode == FormMode.Form)
         {
-            case FormMode.Form:
-                EnterFromForm();
-                break;
-
-            case FormMode.EditingField:
-                EnterFromEditingField();
-                break;
-
-            case FormMode.EditingCustomText:
-                CommitCustomText();
-                break;
+            EnterFromForm();
+        }
+        else
+        {
+            EnterFromEditingField();
         }
     }
 
     /// <summary>
-    /// Escape/cancel: EditingCustomText returns to the choice list; EditingField returns to the
-    /// form; Form mode is a no-op (the caller decides whether to treat it as quit).
+    /// Escape/cancel: EditingField reverts the edited field's custom text to what it was when the
+    /// field was opened (only Esc cancels — arrowing between choices saves), then returns to the
+    /// form. Form mode is a no-op (the caller decides whether to treat it as quit).
     /// </summary>
     public void Cancel()
     {
-        if (Mode == FormMode.EditingCustomText)
+        if (Mode == FormMode.EditingField)
         {
-            CustomTextBuffer = string.Empty;
-            Mode = FormMode.EditingField;
-        }
-        else if (Mode == FormMode.EditingField)
-        {
+            _fields[FocusedRow].RememberCustomText(_customTextAtEditStart);
             CollapseToForm();
         }
     }
 
-    /// <summary>Appends a typed character to the custom-text buffer (EditingCustomText only).</summary>
+    /// <summary>Appends a typed character to the highlighted custom-input choice's buffer.</summary>
     public void AppendChar(char c)
     {
-        if (Mode == FormMode.EditingCustomText)
+        if (IsCustomChoiceHighlighted)
         {
             CustomTextBuffer += c;
         }
     }
 
-    /// <summary>Removes the last character from the custom-text buffer (EditingCustomText only).</summary>
+    /// <summary>Removes the last character from the highlighted custom-input choice's buffer.</summary>
     public void Backspace()
     {
-        if (Mode == FormMode.EditingCustomText && CustomTextBuffer.Length > 0)
+        if (IsCustomChoiceHighlighted && CustomTextBuffer.Length > 0)
         {
             CustomTextBuffer = CustomTextBuffer[..^1];
         }
@@ -192,7 +178,9 @@ internal sealed class FormSelectorState
         }
 
         EditChoiceIndex = _fields[FocusedRow].SelectedIndex;
+        _customTextAtEditStart = _fields[FocusedRow].LastCustomText;
         Mode = FormMode.EditingField;
+        SeedCurrentCustomText();
     }
 
     private void EnterFromEditingField()
@@ -200,27 +188,36 @@ internal sealed class FormSelectorState
         FormField field = _fields[FocusedRow];
         if (field.Choices[EditChoiceIndex].IsCustomInput)
         {
-            CustomTextBuffer = field.CustomValue ?? string.Empty;
-            Mode = FormMode.EditingCustomText;
-            return;
+            string trimmed = CustomTextBuffer.Trim();
+            if (trimmed.Length == 0)
+            {
+                // Nothing typed yet: keep the field open so the user can type a value.
+                return;
+            }
+
+            field.SetCustomValue(EditChoiceIndex, trimmed);
+        }
+        else
+        {
+            field.SelectChoice(EditChoiceIndex);
         }
 
-        field.SelectChoice(EditChoiceIndex);
         CollapseToForm();
     }
 
-    private void CommitCustomText()
+    // Remembers the in-progress text of a highlighted custom choice so returning to it restores it.
+    private void RememberCurrentCustomText()
     {
-        string trimmed = CustomTextBuffer.Trim();
-        if (trimmed.Length == 0)
+        if (IsCustomChoiceHighlighted)
         {
-            // Nothing typed: drop back to the choice list rather than committing an empty value.
-            Mode = FormMode.EditingField;
-            return;
+            _fields[FocusedRow].RememberCustomText(CustomTextBuffer);
         }
+    }
 
-        _fields[FocusedRow].SetCustomValue(EditChoiceIndex, trimmed);
-        CollapseToForm();
+    // Loads the buffer for the now-highlighted choice: its remembered text if custom, else empty.
+    private void SeedCurrentCustomText()
+    {
+        CustomTextBuffer = IsCustomChoiceHighlighted ? _fields[FocusedRow].LastCustomText : string.Empty;
     }
 
     private void CollapseToForm()

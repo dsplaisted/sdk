@@ -31,6 +31,9 @@ internal static class InteractiveFormSelector
     private const int ChoiceIndent = 2;
     private const int ChoiceDetailIndent = 6;
 
+    // Marker appended to the recommended default choice.
+    private const string DefaultSuffix = "  (default)";
+
     private enum KeyResult
     {
         Ignore,
@@ -110,14 +113,14 @@ internal static class InteractiveFormSelector
 
     private static KeyResult ApplyKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
     {
-        return state.Mode == FormMode.EditingCustomText
-            ? ApplyTextKey(state, keyInfo)
-            : ApplyNavKey(state, keyInfo);
+        return state.Mode == FormMode.EditingField
+            ? ApplyEditKey(state, keyInfo)
+            : ApplyFormKey(state, keyInfo.Key);
     }
 
-    private static KeyResult ApplyNavKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
+    private static KeyResult ApplyFormKey(FormSelectorState state, ConsoleKey key)
     {
-        switch (keyInfo.Key)
+        switch (key)
         {
             case ConsoleKey.UpArrow:
                 state.MoveUp();
@@ -132,32 +135,25 @@ internal static class InteractiveFormSelector
                 return state.IsDone ? KeyResult.Accept : KeyResult.Redraw;
 
             case ConsoleKey.Escape:
-                // Esc backs out of an open field, or quits the form without accepting.
-                if (state.Mode == FormMode.EditingField)
-                {
-                    state.Cancel();
-                    return KeyResult.Redraw;
-                }
-
                 return KeyResult.Quit;
 
             default:
-                // Typing while a custom-input choice is highlighted starts text entry immediately.
-                if (state.IsCustomChoiceHighlighted && !char.IsControl(keyInfo.KeyChar) && keyInfo.KeyChar != '\0')
-                {
-                    state.BeginCustomText();
-                    state.AppendChar(keyInfo.KeyChar);
-                    return KeyResult.Redraw;
-                }
-
                 return KeyResult.Ignore;
         }
     }
 
-    private static KeyResult ApplyTextKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
+    private static KeyResult ApplyEditKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
     {
         switch (keyInfo.Key)
         {
+            case ConsoleKey.UpArrow:
+                state.MoveUp();
+                return KeyResult.Redraw;
+
+            case ConsoleKey.DownArrow:
+                state.MoveDown();
+                return KeyResult.Redraw;
+
             case ConsoleKey.Enter:
                 state.Enter();
                 return KeyResult.Redraw;
@@ -171,7 +167,8 @@ internal static class InteractiveFormSelector
                 return KeyResult.Redraw;
 
             default:
-                if (!char.IsControl(keyInfo.KeyChar) && keyInfo.KeyChar != '\0')
+                // Typing edits a highlighted custom-input choice in place (no-op otherwise).
+                if (state.IsCustomChoiceHighlighted && !char.IsControl(keyInfo.KeyChar) && keyInfo.KeyChar != '\0')
                 {
                     state.AppendChar(keyInfo.KeyChar);
                     return KeyResult.Redraw;
@@ -202,7 +199,7 @@ internal static class InteractiveFormSelector
 
         rows.Add(BuildAcceptRow(state.IsAcceptFocused, showArrow, theme));
         rows.Add(Text.Empty);
-        rows.Add(BuildLegend(state.Mode, theme));
+        rows.Add(BuildLegend(state, theme));
 
         return new Rows(rows);
     }
@@ -222,13 +219,14 @@ internal static class InteractiveFormSelector
         bool focused = state.FocusedRow == index;
         bool editing = focused && state.Mode != FormMode.Form;
 
-        rows.Add(BuildFieldRow(field, labelWidth, focused, showArrow, theme));
+        rows.Add(BuildFieldRow(field, labelWidth, focused, editing, showArrow, theme));
 
         if (editing)
         {
+            int alignWidth = field.InlineHelp ? InlineHelpColumnWidth(field) : 0;
             for (int c = 0; c < field.Choices.Count; c++)
             {
-                AppendChoice(rows, model, field, state, c, showArrow, theme);
+                AppendChoice(rows, model, field, state, c, alignWidth, showArrow, theme);
             }
         }
         else
@@ -242,13 +240,25 @@ internal static class InteractiveFormSelector
         rows.Add(Text.Empty);
     }
 
-    private static Markup BuildFieldRow(FormField field, int labelWidth, bool focused, bool showArrow, ThemeColors theme)
+    // While a field is being edited the value is omitted from its row, since the choice list below
+    // shows (and may change) it — repeating it on the row would be redundant or conflicting.
+    private static Markup BuildFieldRow(FormField field, int labelWidth, bool focused, bool editing, bool showArrow, ThemeColors theme)
     {
         string arrow = focused && showArrow ? "> " : "  ";
         string label = field.Label.PadRight(labelWidth);
         string labelStyle = focused ? "white bold" : "white";
-        string valueColor = field.IsChangedFromDefault ? theme.Warning : theme.Accent;
 
+        if (editing)
+        {
+            return new Markup(string.Format(
+                CultureInfo.InvariantCulture,
+                "[{0}]{1}{2}[/]",
+                labelStyle,
+                arrow.EscapeMarkup(),
+                label.EscapeMarkup()));
+        }
+
+        string valueColor = field.IsChangedFromDefault ? theme.Warning : theme.Accent;
         return new Markup(string.Format(
             CultureInfo.InvariantCulture,
             "[{0}]{1}{2}[/]  [{3}]{4}[/]",
@@ -266,76 +276,109 @@ internal static class InteractiveFormSelector
         FormField field,
         FormSelectorState state,
         int index,
+        int alignWidth,
         bool showArrow,
         ThemeColors theme)
     {
         bool selected = state.EditChoiceIndex == index;
         FieldChoice choice = field.Choices[index];
-        string? inlineHelp = field.InlineHelp ? choice.HelperText : null;
 
-        rows.Add(Indent(BuildChoiceMarkup(field, index, selected, showArrow, inlineHelp, theme), ChoiceIndent));
+        // Inline-help fields render content in the slot to the right of the title.
+        string? trailing = field.InlineHelp ? BuildInlineTrailing(field, choice, selected, state, showArrow, theme) : null;
+
+        rows.Add(Indent(BuildChoiceMarkup(field, index, selected, showArrow, trailing, alignWidth, theme), ChoiceIndent));
 
         if (!field.InlineHelp)
         {
             rows.Add(Indent(HelpMarkup(choice.HelperText, theme), ChoiceDetailIndent));
         }
 
-        if (!selected)
+        if (selected)
         {
-            return;
-        }
-
-        AppendDerived(rows, model.BuildDetail(field, index).Lines, ChoiceDetailIndent, theme);
-
-        // The custom-input choice shows an inline text box as soon as it's highlighted, so the user
-        // can start typing directly (the buffer is empty until they do).
-        if (choice.IsCustomInput)
-        {
-            rows.Add(Indent(BuildInputMarkup(state.CustomTextBuffer, showArrow, theme), ChoiceDetailIndent));
+            AppendDerived(rows, model.BuildDetail(field, index).Lines, ChoiceDetailIndent, theme);
         }
     }
 
-    private static Markup BuildChoiceMarkup(FormField field, int index, bool selected, bool showArrow, string? inlineHelp, ThemeColors theme)
+    // The trailing slot for an inline-help choice: the live editor for a highlighted custom choice;
+    // a custom choice's typed value once one exists (even when not selected); otherwise the help.
+    private static string BuildInlineTrailing(FormField field, FieldChoice choice, bool selected, FormSelectorState state, bool showArrow, ThemeColors theme)
+    {
+        if (choice.IsCustomInput)
+        {
+            if (selected)
+            {
+                return BuildEditorTrailing(state.CustomTextBuffer, showArrow, theme);
+            }
+
+            string value = field.LastCustomText;
+            if (value.Length > 0)
+            {
+                return string.Format(CultureInfo.InvariantCulture, "[{0}]{1}[/]", theme.Accent, value.EscapeMarkup());
+            }
+        }
+
+        return string.Format(CultureInfo.InvariantCulture, "[{0}]{1}[/]", theme.Dim, choice.HelperText.EscapeMarkup());
+    }
+
+    private static Markup BuildChoiceMarkup(FormField field, int index, bool selected, bool showArrow, string? trailing, int alignWidth, ThemeColors theme)
     {
         FieldChoice choice = field.Choices[index];
-        string suffix = index == field.DefaultIndex ? "  (default)" : string.Empty;
-        string trailing = inlineHelp is null
-            ? string.Empty
-            : string.Format(CultureInfo.InvariantCulture, "  [{0}]{1}[/]", theme.Dim, inlineHelp.EscapeMarkup());
+        string suffix = index == field.DefaultIndex ? DefaultSuffix : string.Empty;
+        string titleStyle = selected ? $"{theme.Accent} bold" : "white";
+        string arrow = selected && showArrow ? "> " : "  ";
 
-        if (selected)
+        string tail = string.Empty;
+        if (trailing is not null)
         {
-            string arrow = showArrow ? "> " : "  ";
-            return new Markup(string.Format(
-                CultureInfo.InvariantCulture,
-                "[{0} bold]{1}{2}[/][{3}]{4}[/]{5}",
-                theme.Accent,
-                arrow.EscapeMarkup(),
-                choice.Title.EscapeMarkup(),
-                theme.Dim,
-                suffix.EscapeMarkup(),
-                trailing));
+            // Pad so the trailing slot starts at the same column for every choice (a simple table).
+            int pad = Math.Max(0, alignWidth - (choice.Title.Length + suffix.Length));
+            tail = new string(' ', pad) + "  " + trailing;
         }
 
         return new Markup(string.Format(
             CultureInfo.InvariantCulture,
-            "[white]  {0}[/][{1}]{2}[/]{3}",
+            "[{0}]{1}{2}[/][{3}]{4}[/]{5}",
+            titleStyle,
+            arrow.EscapeMarkup(),
             choice.Title.EscapeMarkup(),
             theme.Dim,
             suffix.EscapeMarkup(),
-            trailing));
+            tail));
     }
 
-    private static Markup BuildInputMarkup(string buffer, bool showArrow, ThemeColors theme)
+    private static int InlineHelpColumnWidth(FormField field)
+    {
+        int width = 0;
+        for (int i = 0; i < field.Choices.Count; i++)
+        {
+            int len = field.Choices[i].Title.Length + (i == field.DefaultIndex ? DefaultSuffix.Length : 0);
+            width = Math.Max(width, len);
+        }
+
+        return width;
+    }
+
+    // The live custom editor rendered inline in the trailing slot: "> <buffer>▏" (or a placeholder).
+    private static string BuildEditorTrailing(string buffer, bool showArrow, ThemeColors theme)
     {
         string cursor = showArrow ? "▏" : " ";
-        return new Markup(string.Format(
+        if (buffer.Length == 0)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "[{0}]> [/][{1}]{2}[/][{0} italic]  type a channel[/]",
+                theme.Dim,
+                theme.Accent,
+                cursor);
+        }
+
+        return string.Format(
             CultureInfo.InvariantCulture,
-            "[{0}]> [/][{1}]{2}[/][{0}]{3}[/]",
+            "[{0}]> [/][{1}]{2}{3}[/]",
             theme.Dim,
             theme.Accent,
             buffer.EscapeMarkup(),
-            cursor));
+            cursor);
     }
 
     private static void AppendDerived(List<IRenderable> rows, IReadOnlyList<DetailLine> lines, int indent, ThemeColors theme)
@@ -377,14 +420,21 @@ internal static class InteractiveFormSelector
         return new Markup($"[{theme.Dim}]  {accept.EscapeMarkup()}[/]");
     }
 
-    private static Markup BuildLegend(FormMode mode, ThemeColors theme)
+    private static Markup BuildLegend(FormSelectorState state, ThemeColors theme)
     {
-        string text = mode switch
+        string text;
+        if (state.Mode != FormMode.EditingField)
         {
-            FormMode.EditingCustomText => "type a channel · Enter confirm · Esc back",
-            FormMode.EditingField => "↑/↓ choose · Enter select · Esc back",
-            _ => "↑/↓ move · Enter edit/accept · Esc quit",
-        };
+            text = "↑/↓ move · Enter edit/accept · Esc quit";
+        }
+        else if (state.IsCustomChoiceHighlighted)
+        {
+            text = "type · ↑/↓ choose · Enter set · Esc back";
+        }
+        else
+        {
+            text = "↑/↓ choose · Enter select · Esc back";
+        }
 
         return new Markup($"[{theme.Dim}]{text.EscapeMarkup()}[/]");
     }
