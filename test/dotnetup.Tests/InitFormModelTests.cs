@@ -9,59 +9,92 @@ public class InitFormModelTests
 {
     // Field order in the sample form.
     private const int ChannelField = 0;
-    private const int ModeField = 1;
-    private const int MigrateField = 2;
+    private const int ProfileField = 1;
+    private const int PathField = 2;
+    private const int MigrateField = 3;
 
-    // Mode choice order: Isolation, Terminal Profile, Replacement.
-    private const int ModeIsolation = 0;
-    private const int ModeTerminalProfile = 1;
-    private const int ModeReplacement = 2;
+    // Profile choice order: Yes (recommended), No.
+    private const int ProfileYes = 0;
+    private const int ProfileNo = 1;
+
+    // Path choice order: No (recommended), Yes.
+    private const int PathNo = 0;
+    private const int PathYes = 1;
 
     private const int MigrateYes = 0;
     private const int MigrateNo = 1;
 
     [Fact]
-    public void ModeChoices_AreOrderedIsolationProfileReplacement_WithProfileDefault()
+    public void ProfileChoices_AreYesNo_WithYesDefault()
     {
         var model = InitFormModel.CreateSample();
-        var mode = model.Fields[ModeField];
+        var profile = model.Fields[ProfileField];
 
-        mode.Choices[ModeIsolation].Title.Should().StartWith("Isolation");
-        mode.Choices[ModeTerminalProfile].Title.Should().StartWith("Terminal Profile");
-        mode.Choices[ModeReplacement].Title.Should().StartWith("Replacement");
-        mode.DefaultIndex.Should().Be(ModeTerminalProfile);
+        profile.Label.Should().Be("Modify shell profile");
+        profile.Choices[ProfileYes].Title.Should().Be("Yes");
+        profile.Choices[ProfileNo].Title.Should().Be("No");
+        profile.DefaultIndex.Should().Be(ProfileYes);
     }
 
     [Fact]
-    public void Detail_TerminalProfileMode_ShowsInstallAndProfilePaths()
+    public void PathChoices_AreNoYes_WithNoDefault()
+    {
+        var model = InitFormModel.CreateSample();
+        var path = model.Fields[PathField];
+
+        path.Label.Should().Be("Replace system PATH");
+        path.Choices[PathNo].Title.Should().Be("No");
+        path.Choices[PathYes].Title.Should().Be("Yes");
+        path.DefaultIndex.Should().Be(PathNo);
+    }
+
+    [Fact]
+    public void PathField_IsVisibleOnlyWhenProfileIsYes()
+    {
+        var model = InitFormModel.CreateSample();
+        var profile = model.Fields[ProfileField];
+        var path = model.Fields[PathField];
+
+        profile.SelectChoice(ProfileYes);
+        path.IsVisible.Should().BeTrue();
+
+        profile.SelectChoice(ProfileNo);
+        path.IsVisible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Detail_ProfileYes_ShowsInstallAndProfilePaths()
     {
         var model = InitFormModel.CreateSample();
 
-        FieldDetail detail = model.BuildDetail(model.Fields[ModeField], ModeTerminalProfile);
+        FieldDetail detail = model.BuildDetail(model.Fields[ProfileField], ProfileYes);
 
         detail.Lines.Should().Contain(l => l.Label == "Installs to:" && l.Value == model.InstallPath);
         detail.Lines.Should().Contain(l => l.Label == "Edits profile:" && l.Value == model.ProfilePath);
     }
 
     [Fact]
-    public void Detail_IsolationMode_ShowsInstallPathButNoProfile()
+    public void Detail_ProfileNo_ShowsInstallPathButNoProfile()
     {
         var model = InitFormModel.CreateSample();
 
-        FieldDetail detail = model.BuildDetail(model.Fields[ModeField], ModeIsolation);
+        FieldDetail detail = model.BuildDetail(model.Fields[ProfileField], ProfileNo);
 
         detail.Lines.Should().Contain(l => l.Label == "Installs to:");
         detail.Lines.Should().NotContain(l => l.Label == "Edits profile:");
     }
 
     [Fact]
-    public void Detail_ReplacementMode_NotesPathReplacement()
+    public void Detail_Path_HasHelpTextAndNoDerivedLines()
     {
         var model = InitFormModel.CreateSample();
 
-        FieldDetail detail = model.BuildDetail(model.Fields[ModeField], ModeReplacement);
+        FieldDetail yes = model.BuildDetail(model.Fields[PathField], PathYes);
+        FieldDetail no = model.BuildDetail(model.Fields[PathField], PathNo);
 
-        detail.Lines.Should().Contain(l => l.Label.Contains("Replaces dotnet"));
+        yes.HelperText.Should().NotBeNullOrWhiteSpace();
+        yes.Lines.Should().BeEmpty();
+        no.Lines.Should().BeEmpty();
     }
 
     [Fact]

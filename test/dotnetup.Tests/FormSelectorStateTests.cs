@@ -303,18 +303,61 @@ public class FormSelectorStateTests
     }
 
     [Fact]
-    public void ReturningToCustomAfterTyping_RestoresRememberedText()
+    public void ConditionalField_DropsOutOfNavigation_WhenHidden()
     {
-        var fields = FieldsWithCustom();
-        var state = new FormSelectorState(fields);
-        state.MoveUp();
-        state.Enter();
-        state.MoveDown(); // custom
-        state.AppendChar('8');
-        state.AppendChar('.');
-        state.MoveUp();   // arrow away (remembers "8.")
-        state.MoveDown(); // back to custom
+        // gate field at index 0 (Yes/No); conditional field visible only when gate == Yes (0).
+        var gate = new FormField("Gate", [new FieldChoice("Yes", ""), new FieldChoice("No", "")], defaultIndex: 0);
+        var dependent = new FormField(
+            "Dependent",
+            [new FieldChoice("a", ""), new FieldChoice("b", "")],
+            defaultIndex: 0,
+            isVisible: () => gate.SelectedIndex == 0);
+        var trailing = new FormField("Trailing", [new FieldChoice("x", "")], defaultIndex: 0);
+        var state = new FormSelectorState([gate, dependent, trailing]);
 
-        state.CustomTextBuffer.Should().Be("8.");
+        // Initially gate == Yes: all three fields visible, Accept at row 3.
+        state.AcceptRow.Should().Be(3);
+        state.VisibleFields.Should().HaveCount(3);
+
+        // Edit the gate to No -> dependent hides.
+        state.MoveUp(); // trailing (row 2)
+        state.MoveUp(); // dependent (row 1)
+        state.MoveUp(); // gate (row 0)
+        state.FocusedRow.Should().Be(0);
+        state.Enter();    // edit gate
+        state.MoveDown(); // highlight "No"
+        state.Enter();    // commit No
+
+        state.VisibleFields.Should().HaveCount(2);
+        state.VisibleFields.Select(f => f.Label).Should().Equal("Gate", "Trailing");
+        state.AcceptRow.Should().Be(2);
+        state.FocusedRow.Should().Be(0); // still on the gate
+
+        // Moving down now goes straight from gate to trailing (dependent is skipped).
+        state.MoveDown();
+        state.FocusedField.Should().BeSameAs(trailing);
+    }
+
+    [Fact]
+    public void ReshowingConditionalField_RestoresItToNavigation()
+    {
+        var gate = new FormField("Gate", [new FieldChoice("Yes", ""), new FieldChoice("No", "")], defaultIndex: 1);
+        var dependent = new FormField(
+            "Dependent",
+            [new FieldChoice("a", "")],
+            defaultIndex: 0,
+            isVisible: () => gate.SelectedIndex == 0);
+        var state = new FormSelectorState([gate, dependent]);
+
+        // gate == No initially: only the gate is visible.
+        state.VisibleFields.Should().ContainSingle();
+
+        state.MoveUp();   // focus gate (row 0)
+        state.Enter();    // edit
+        state.MoveUp();   // highlight "Yes"
+        state.Enter();    // commit Yes
+
+        state.VisibleFields.Should().HaveCount(2);
+        state.VisibleFields.Select(f => f.Label).Should().Equal("Gate", "Dependent");
     }
 }

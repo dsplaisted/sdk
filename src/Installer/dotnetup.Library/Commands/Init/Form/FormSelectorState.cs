@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Linq;
+
 namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Init.Form;
 
 /// <summary>
@@ -44,8 +46,15 @@ internal sealed class FormSelectorState
         FocusedRow = AcceptRow;
     }
 
+    /// <summary>
+    /// The fields currently shown, in display order. Conditional fields may drop in or out as other
+    /// fields change, so navigation, the Accept row position, and rendering all use this view rather
+    /// than the full field list.
+    /// </summary>
+    public IReadOnlyList<FormField> VisibleFields => _fields.Where(static f => f.IsVisible).ToList();
+
     /// <summary>The row index representing the Accept action (immediately after the last field).</summary>
-    public int AcceptRow => _fields.Count;
+    public int AcceptRow => VisibleFields.Count;
 
     /// <summary>Current interaction mode.</summary>
     public FormMode Mode { get; private set; } = FormMode.Form;
@@ -73,8 +82,14 @@ internal sealed class FormSelectorState
     public bool IsAcceptFocused => Mode == FormMode.Form && FocusedRow == AcceptRow;
 
     /// <summary>The field currently focused (Form mode) or being edited; null when Accept is focused.</summary>
-    public FormField? FocusedField =>
-        FocusedRow >= 0 && FocusedRow < _fields.Count ? _fields[FocusedRow] : null;
+    public FormField? FocusedField
+    {
+        get
+        {
+            IReadOnlyList<FormField> visible = VisibleFields;
+            return FocusedRow >= 0 && FocusedRow < visible.Count ? visible[FocusedRow] : null;
+        }
+    }
 
     /// <summary>True when editing a field and the highlighted choice accepts free-text input.</summary>
     public bool IsCustomChoiceHighlighted =>
@@ -112,7 +127,7 @@ internal sealed class FormSelectorState
                 FocusedRow++;
             }
         }
-        else if (EditChoiceIndex < _fields[FocusedRow].Choices.Count - 1)
+        else if (EditChoiceIndex < VisibleFields[FocusedRow].Choices.Count - 1)
         {
             RememberCurrentCustomText();
             EditChoiceIndex++;
@@ -146,7 +161,7 @@ internal sealed class FormSelectorState
     {
         if (Mode == FormMode.EditingField)
         {
-            _fields[FocusedRow].RememberCustomText(_customTextAtEditStart);
+            VisibleFields[FocusedRow].RememberCustomText(_customTextAtEditStart);
             CollapseToForm();
         }
     }
@@ -177,15 +192,16 @@ internal sealed class FormSelectorState
             return;
         }
 
-        EditChoiceIndex = _fields[FocusedRow].SelectedIndex;
-        _customTextAtEditStart = _fields[FocusedRow].LastCustomText;
+        FormField field = VisibleFields[FocusedRow];
+        EditChoiceIndex = field.SelectedIndex;
+        _customTextAtEditStart = field.LastCustomText;
         Mode = FormMode.EditingField;
         SeedCurrentCustomText();
     }
 
     private void EnterFromEditingField()
     {
-        FormField field = _fields[FocusedRow];
+        FormField field = VisibleFields[FocusedRow];
         if (field.Choices[EditChoiceIndex].IsCustomInput)
         {
             string trimmed = CustomTextBuffer.Trim();
@@ -210,14 +226,14 @@ internal sealed class FormSelectorState
     {
         if (IsCustomChoiceHighlighted)
         {
-            _fields[FocusedRow].RememberCustomText(CustomTextBuffer);
+            VisibleFields[FocusedRow].RememberCustomText(CustomTextBuffer);
         }
     }
 
     // Loads the buffer for the now-highlighted choice: its remembered text if custom, else empty.
     private void SeedCurrentCustomText()
     {
-        CustomTextBuffer = IsCustomChoiceHighlighted ? _fields[FocusedRow].LastCustomText : string.Empty;
+        CustomTextBuffer = IsCustomChoiceHighlighted ? VisibleFields[FocusedRow].LastCustomText : string.Empty;
     }
 
     private void CollapseToForm()
@@ -225,5 +241,11 @@ internal sealed class FormSelectorState
         Mode = FormMode.Form;
         EditChoiceIndex = -1;
         CustomTextBuffer = string.Empty;
+
+        // Committing a choice can change which conditional fields are visible; keep focus in range.
+        if (FocusedRow > AcceptRow)
+        {
+            FocusedRow = AcceptRow;
+        }
     }
 }

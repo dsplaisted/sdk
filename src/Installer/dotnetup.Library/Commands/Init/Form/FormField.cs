@@ -9,7 +9,14 @@ namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Init.Form;
 /// </summary>
 internal sealed class FormField
 {
-    public FormField(string label, IReadOnlyList<FieldChoice> choices, int defaultIndex, bool inlineHelp = false)
+    private readonly Func<bool>? _isVisible;
+
+    public FormField(
+        string label,
+        IReadOnlyList<FieldChoice> choices,
+        int defaultIndex,
+        bool inlineHelp = false,
+        Func<bool>? isVisible = null)
     {
         if (choices.Count == 0)
         {
@@ -26,7 +33,15 @@ internal sealed class FormField
         DefaultIndex = defaultIndex;
         SelectedIndex = defaultIndex;
         InlineHelp = inlineHelp;
+        _isVisible = isVisible;
     }
+
+    /// <summary>
+    /// Whether this field is currently shown. A conditional field (e.g. one that only applies when
+    /// another field has a particular value) supplies a predicate; fields without one are always
+    /// visible.
+    /// </summary>
+    public bool IsVisible => _isVisible?.Invoke() ?? true;
 
     /// <summary>The field label shown to the left of the value (e.g. "SDK Channel").</summary>
     public string Label { get; }

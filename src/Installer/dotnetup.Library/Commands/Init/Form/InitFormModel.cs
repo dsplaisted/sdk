@@ -17,21 +17,20 @@ internal sealed class InitFormModel
     // Maximum number of versions listed per component line before collapsing to "and N more".
     private const int MaxVersionsShown = 3;
 
-    // Indices into the Mode field's choices (see CreateSample for construction order).
-    private const int ModeTerminalProfileIndex = 1;
-    private const int ModeReplacementIndex = 2;
+    // Index into the "Modify shell profile" field's choices. Yes is the recommended default.
+    private const int ProfileYesIndex = 0;
 
     // Index into the Migrate field's choices.
     private const int MigrateYesIndex = 0;
 
-    private readonly FormField _modeField;
+    private readonly FormField _profileField;
     private readonly FormField _migrateField;
 
     private InitFormModel(
         string subtitle,
         string question,
         IReadOnlyList<FormField> fields,
-        FormField modeField,
+        FormField profileField,
         FormField migrateField,
         string installPath,
         string profilePath,
@@ -41,7 +40,7 @@ internal sealed class InitFormModel
         Subtitle = subtitle;
         Question = question;
         Fields = fields;
-        _modeField = modeField;
+        _profileField = profileField;
         _migrateField = migrateField;
         InstallPath = installPath;
         ProfilePath = profilePath;
@@ -61,7 +60,7 @@ internal sealed class InitFormModel
     /// <summary>Mock location where .NET would be installed.</summary>
     public string InstallPath { get; }
 
-    /// <summary>Mock shell profile file that Terminal Profile mode would edit.</summary>
+    /// <summary>Mock shell profile file that the "Modify shell profile" option would edit.</summary>
     public string ProfilePath { get; }
 
     /// <summary>Mock SDK versions from the existing system install that could be migrated.</summary>
@@ -80,16 +79,12 @@ internal sealed class InitFormModel
         string helper = field.Choices[choiceIndex].HelperText;
         var lines = new List<DetailLine>();
 
-        if (ReferenceEquals(field, _modeField))
+        if (ReferenceEquals(field, _profileField))
         {
             lines.Add(new DetailLine("Installs to:", InstallPath));
-            if (choiceIndex == ModeTerminalProfileIndex)
+            if (choiceIndex == ProfileYesIndex)
             {
                 lines.Add(new DetailLine("Edits profile:", ProfilePath));
-            }
-            else if (choiceIndex == ModeReplacementIndex)
-            {
-                lines.Add(new DetailLine("Replaces dotnet on the system PATH"));
             }
         }
         else if (ReferenceEquals(field, _migrateField) && choiceIndex == MigrateYesIndex)
@@ -122,7 +117,8 @@ internal sealed class InitFormModel
     }
 
     /// <summary>
-    /// Creates the prototype's sample form: SDK Channel, Mode, and Migrate. Mock values + help text.
+    /// Creates the prototype's sample form: SDK Channel, two profile/PATH yes/no questions, and
+    /// Migrate. Mock values + help text.
     /// </summary>
     public static InitFormModel CreateSample()
     {
@@ -140,15 +136,25 @@ internal sealed class InitFormModel
             defaultIndex: 0,
             inlineHelp: true);
 
-        // Order: Isolation, Terminal Profile (recommended/default), Replacement.
-        var mode = new FormField(
-            "Mode",
+        // Prompt 1 (always shown): configure the shell profile? Yes is recommended.
+        var profile = new FormField(
+            "Modify shell profile",
             [
-                new FieldChoice("Isolation", "Keep dotnetup's .NET fully self-contained; nothing is added to PATH. You invoke it explicitly. Safest option if you manage multiple .NET installs yourself."),
-                new FieldChoice("Terminal Profile (recommended)", "Adds dotnetup's .NET to your PowerShell profile's PATH so `dotnet` resolves to it in new terminals. A good balance of convenience and isolation; doesn't touch system-wide settings."),
-                new FieldChoice("Replacement", "Make dotnetup's .NET the machine's primary `dotnet`. Most seamless, but overrides any existing system-wide .NET on PATH."),
+                new FieldChoice("Yes", "Modify the current shell profile so `dotnet` resolves to dotnetup's installs in new terminals. Recommended if you develop with dotnetup and launch your IDE from the terminal. Only PowerShell is supported; CMD has no profile file."),
+                new FieldChoice("No", "Use `dotnetup dotnet` to run installs managed by dotnetup alongside your existing installs. Recommended if you don't have admin rights, or want to keep your system-managed installs (e.g. Program Files) as the default."),
             ],
-            defaultIndex: ModeTerminalProfileIndex);
+            defaultIndex: ProfileYesIndex);
+
+        // Prompt 2 (Windows; shown only when the profile is being modified and a system .NET install
+        // exists): replace the system-level PATH entry? No is recommended.
+        var path = new FormField(
+            "Replace system PATH",
+            [
+                new FieldChoice("No", "Your existing system installs are still used outside the shell(s) you configured."),
+                new FieldChoice("Yes", "Make every debugger, application, and IDE use dotnetup's installs by default. Requires admin rights and enables `cmd` by default. Other user accounts on this machine are affected and applications may break."),
+            ],
+            defaultIndex: 0,
+            isVisible: () => profile.SelectedIndex == ProfileYesIndex);
 
         var migrate = new FormField(
             "Migrate system installs",
@@ -161,8 +167,8 @@ internal sealed class InitFormModel
         return new InitFormModel(
             subtitle: "Welcome to dotnetup!",
             question: "Install .NET with these settings?",
-            fields: [channel, mode, migrate],
-            modeField: mode,
+            fields: [channel, profile, path, migrate],
+            profileField: profile,
             migrateField: migrate,
             installPath: Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\.dotnet"),
             profilePath: Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"),

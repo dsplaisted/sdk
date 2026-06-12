@@ -107,7 +107,7 @@ internal static class InteractiveFormSelector
                 }
             });
 
-        RenderFinal(model, accepted);
+        RenderFinal(state, model, accepted);
         return accepted;
     }
 
@@ -181,7 +181,8 @@ internal static class InteractiveFormSelector
     private static Rows BuildRenderable(InitFormModel model, FormSelectorState state, bool showArrow)
     {
         ThemeColors theme = DotnetupTheme.Current;
-        int labelWidth = MaxLabelWidth(model);
+        IReadOnlyList<FormField> fields = state.VisibleFields;
+        int labelWidth = MaxLabelWidth(fields);
 
         var rows = new List<IRenderable>
         {
@@ -192,9 +193,9 @@ internal static class InteractiveFormSelector
             Text.Empty,
         };
 
-        for (int i = 0; i < model.Fields.Count; i++)
+        for (int i = 0; i < fields.Count; i++)
         {
-            AppendField(rows, model, state, i, labelWidth, showArrow, theme);
+            AppendField(rows, model, state, fields[i], i, labelWidth, showArrow, theme);
         }
 
         rows.Add(BuildAcceptRow(state.IsAcceptFocused, showArrow, theme));
@@ -210,12 +211,12 @@ internal static class InteractiveFormSelector
         List<IRenderable> rows,
         InitFormModel model,
         FormSelectorState state,
+        FormField field,
         int index,
         int labelWidth,
         bool showArrow,
         ThemeColors theme)
     {
-        FormField field = model.Fields[index];
         bool focused = state.FocusedRow == index;
         bool editing = focused && state.Mode != FormMode.Form;
 
@@ -442,7 +443,7 @@ internal static class InteractiveFormSelector
     private static Padder Indent(IRenderable content, int left) =>
         new(content, new Padding(left, 0, 0, 0));
 
-    private static void RenderFinal(InitFormModel model, bool accepted)
+    private static void RenderFinal(FormSelectorState state, InitFormModel model, bool accepted)
     {
         ThemeColors theme = DotnetupTheme.Current;
         if (!accepted)
@@ -451,9 +452,10 @@ internal static class InteractiveFormSelector
             return;
         }
 
-        int labelWidth = MaxLabelWidth(model);
+        IReadOnlyList<FormField> fields = state.VisibleFields;
+        int labelWidth = MaxLabelWidth(fields);
         AnsiConsole.MarkupLine($"[{theme.Success} bold]{"Selected settings:".EscapeMarkup()}[/]");
-        foreach (FormField field in model.Fields)
+        foreach (FormField field in fields)
         {
             string valueColor = field.IsChangedFromDefault ? theme.Warning : theme.Accent;
             AnsiConsole.MarkupLine(string.Format(
@@ -465,10 +467,10 @@ internal static class InteractiveFormSelector
         }
     }
 
-    private static int MaxLabelWidth(InitFormModel model)
+    private static int MaxLabelWidth(IReadOnlyList<FormField> fields)
     {
         int width = 0;
-        foreach (FormField field in model.Fields)
+        foreach (FormField field in fields)
         {
             width = Math.Max(width, field.Label.Length);
         }
