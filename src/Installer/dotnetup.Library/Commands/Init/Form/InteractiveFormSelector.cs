@@ -9,24 +9,27 @@ namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Init.Form;
 
 /// <summary>
 /// Renders the init form prototype and runs its input loop using Spectre.Console's
-/// <see cref="LiveDisplay"/> for flicker-free updates. Mirrors the approach of
-/// <see cref="InteractiveOptionSelector"/> but drives a <see cref="FormSelectorState"/>:
+/// <see cref="LiveDisplay"/> for flicker-free updates. The whole form stays visible at all times,
+/// and every field always shows its current value's help text and derived info (install location,
+/// profile file, the system installs that would migrate). The focused field expands <i>inline</i>
+/// to show all of its choices (each with help text); the highlighted choice's derived info appears
+/// directly beneath it. A custom-input choice opens an inline text box.
 ///
-/// <list type="bullet">
-/// <item><b>Collapsed form view</b> — banner, subtitle/question, one row per field
-/// (<c>Label: value</c>, value colored accent when default / warning when changed), an Accept row
-/// (the default focus, with the flashing arrow), and a navigation legend.</item>
-/// <item><b>Expanded edit view</b> — the focused field's choices, the selected one marked, with a
-/// detailed helper-text panel for it; the other fields collapse to dimmed one-liners to make room.</item>
-/// </list>
+/// Nested content is indented with <see cref="Padder"/> so wrapped help text keeps a consistent
+/// hanging indent.
 ///
 /// UI-only prototype: it mutates the model's field selections in place and reports whether the user
 /// accepted. It is not wired to any install/config logic.
 /// </summary>
 internal static class InteractiveFormSelector
 {
-    // Arrow flash interval in milliseconds (matches InteractiveOptionSelector).
+    // Arrow/cursor flash interval in milliseconds (matches InteractiveOptionSelector).
     private const int FlashIntervalMs = 600;
+
+    // Left-indent (columns) for content nested under a field row and under a choice row.
+    private const int FieldIndent = 4;
+    private const int ChoiceIndent = 2;
+    private const int ChoiceDetailIndent = 6;
 
     private enum KeyResult
     {
@@ -69,7 +72,7 @@ internal static class InteractiveFormSelector
                 {
                     if (Console.KeyAvailable)
                     {
-                        KeyResult result = ApplyKey(state, Console.ReadKey(intercept: true).Key);
+                        KeyResult result = ApplyKey(state, Console.ReadKey(intercept: true));
                         if (result == KeyResult.Accept)
                         {
                             accepted = true;
@@ -105,9 +108,16 @@ internal static class InteractiveFormSelector
         return accepted;
     }
 
-    private static KeyResult ApplyKey(FormSelectorState state, ConsoleKey key)
+    private static KeyResult ApplyKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
     {
-        switch (key)
+        return state.Mode == FormMode.EditingCustomText
+            ? ApplyTextKey(state, keyInfo)
+            : ApplyNavKey(state, keyInfo);
+    }
+
+    private static KeyResult ApplyNavKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
+    {
+        switch (keyInfo.Key)
         {
             case ConsoleKey.UpArrow:
                 state.MoveUp();
@@ -132,18 +142,46 @@ internal static class InteractiveFormSelector
                 return KeyResult.Quit;
 
             default:
+                // Typing while a custom-input choice is highlighted starts text entry immediately.
+                if (state.IsCustomChoiceHighlighted && !char.IsControl(keyInfo.KeyChar) && keyInfo.KeyChar != '\0')
+                {
+                    state.BeginCustomText();
+                    state.AppendChar(keyInfo.KeyChar);
+                    return KeyResult.Redraw;
+                }
+
+                return KeyResult.Ignore;
+        }
+    }
+
+    private static KeyResult ApplyTextKey(FormSelectorState state, ConsoleKeyInfo keyInfo)
+    {
+        switch (keyInfo.Key)
+        {
+            case ConsoleKey.Enter:
+                state.Enter();
+                return KeyResult.Redraw;
+
+            case ConsoleKey.Escape:
+                state.Cancel();
+                return KeyResult.Redraw;
+
+            case ConsoleKey.Backspace:
+                state.Backspace();
+                return KeyResult.Redraw;
+
+            default:
+                if (!char.IsControl(keyInfo.KeyChar) && keyInfo.KeyChar != '\0')
+                {
+                    state.AppendChar(keyInfo.KeyChar);
+                    return KeyResult.Redraw;
+                }
+
                 return KeyResult.Ignore;
         }
     }
 
     private static Rows BuildRenderable(InitFormModel model, FormSelectorState state, bool showArrow)
-    {
-        return state.Mode == FormMode.EditingField
-            ? BuildEditView(model, state, showArrow)
-            : BuildFormView(model, state, showArrow);
-    }
-
-    private static Rows BuildFormView(InitFormModel model, FormSelectorState state, bool showArrow)
     {
         ThemeColors theme = DotnetupTheme.Current;
         int labelWidth = MaxLabelWidth(model);
@@ -153,38 +191,178 @@ internal static class InteractiveFormSelector
             DotnetBotBanner.BuildPanel(),
             Text.Empty,
             new Markup($"[bold {theme.Brand}]{model.Subtitle.EscapeMarkup()}[/]"),
-            new Markup(model.Question.EscapeMarkup()),
+            new Markup($"[white]{model.Question.EscapeMarkup()}[/]"),
             Text.Empty,
         };
 
         for (int i = 0; i < model.Fields.Count; i++)
         {
-            rows.Add(BuildFieldRow(model.Fields[i], labelWidth, state.FocusedRow == i, showArrow, theme));
+            AppendField(rows, model, state, i, labelWidth, showArrow, theme);
+        }
+
+        rows.Add(BuildAcceptRow(state.IsAcceptFocused, showArrow, theme));
+        rows.Add(Text.Empty);
+        rows.Add(BuildLegend(state.Mode, theme));
+
+        return new Rows(rows);
+    }
+
+    // Appends a field's row plus its always-visible detail. The field being edited expands to show
+    // all of its choices instead of just the selected value's detail.
+    private static void AppendField(
+        List<IRenderable> rows,
+        InitFormModel model,
+        FormSelectorState state,
+        int index,
+        int labelWidth,
+        bool showArrow,
+        ThemeColors theme)
+    {
+        FormField field = model.Fields[index];
+        bool focused = state.FocusedRow == index;
+        bool editing = focused && state.Mode != FormMode.Form;
+
+        rows.Add(BuildFieldRow(field, labelWidth, focused, showArrow, theme));
+
+        if (editing)
+        {
+            for (int c = 0; c < field.Choices.Count; c++)
+            {
+                AppendChoice(rows, model, field, state, c, showArrow, theme);
+            }
+        }
+        else
+        {
+            // Always show the selected value's help and derived info, even when not focused.
+            FieldDetail detail = model.BuildDetail(field, field.SelectedIndex);
+            rows.Add(Indent(HelpMarkup(detail.HelperText, theme), FieldIndent));
+            AppendDerived(rows, detail.Lines, FieldIndent, theme);
         }
 
         rows.Add(Text.Empty);
-        rows.Add(BuildAcceptRow(state.IsAcceptFocused, showArrow, theme));
-        rows.Add(Text.Empty);
-        rows.Add(BuildLegend("↑/↓ move · Enter edit/accept · Esc quit", theme));
-
-        return new Rows(rows);
     }
 
     private static Markup BuildFieldRow(FormField field, int labelWidth, bool focused, bool showArrow, ThemeColors theme)
     {
         string arrow = focused && showArrow ? "> " : "  ";
         string label = field.Label.PadRight(labelWidth);
+        string labelStyle = focused ? "white bold" : "white";
         string valueColor = field.IsChangedFromDefault ? theme.Warning : theme.Accent;
-        string labelColor = focused ? theme.Brand : theme.Dim;
 
         return new Markup(string.Format(
             CultureInfo.InvariantCulture,
             "[{0}]{1}{2}[/]  [{3}]{4}[/]",
-            labelColor,
+            labelStyle,
             arrow.EscapeMarkup(),
             label.EscapeMarkup(),
             valueColor,
-            field.Selected.Title.EscapeMarkup()));
+            field.DisplayValue.EscapeMarkup()));
+    }
+
+    // A choice row, its help text, and (when highlighted) its derived info inline beneath it.
+    private static void AppendChoice(
+        List<IRenderable> rows,
+        InitFormModel model,
+        FormField field,
+        FormSelectorState state,
+        int index,
+        bool showArrow,
+        ThemeColors theme)
+    {
+        bool selected = state.EditChoiceIndex == index;
+        FieldChoice choice = field.Choices[index];
+        string? inlineHelp = field.InlineHelp ? choice.HelperText : null;
+
+        rows.Add(Indent(BuildChoiceMarkup(field, index, selected, showArrow, inlineHelp, theme), ChoiceIndent));
+
+        if (!field.InlineHelp)
+        {
+            rows.Add(Indent(HelpMarkup(choice.HelperText, theme), ChoiceDetailIndent));
+        }
+
+        if (!selected)
+        {
+            return;
+        }
+
+        AppendDerived(rows, model.BuildDetail(field, index).Lines, ChoiceDetailIndent, theme);
+
+        // The custom-input choice shows an inline text box as soon as it's highlighted, so the user
+        // can start typing directly (the buffer is empty until they do).
+        if (choice.IsCustomInput)
+        {
+            rows.Add(Indent(BuildInputMarkup(state.CustomTextBuffer, showArrow, theme), ChoiceDetailIndent));
+        }
+    }
+
+    private static Markup BuildChoiceMarkup(FormField field, int index, bool selected, bool showArrow, string? inlineHelp, ThemeColors theme)
+    {
+        FieldChoice choice = field.Choices[index];
+        string suffix = index == field.DefaultIndex ? "  (default)" : string.Empty;
+        string trailing = inlineHelp is null
+            ? string.Empty
+            : string.Format(CultureInfo.InvariantCulture, "  [{0}]{1}[/]", theme.Dim, inlineHelp.EscapeMarkup());
+
+        if (selected)
+        {
+            string arrow = showArrow ? "> " : "  ";
+            return new Markup(string.Format(
+                CultureInfo.InvariantCulture,
+                "[{0} bold]{1}{2}[/][{3}]{4}[/]{5}",
+                theme.Accent,
+                arrow.EscapeMarkup(),
+                choice.Title.EscapeMarkup(),
+                theme.Dim,
+                suffix.EscapeMarkup(),
+                trailing));
+        }
+
+        return new Markup(string.Format(
+            CultureInfo.InvariantCulture,
+            "[white]  {0}[/][{1}]{2}[/]{3}",
+            choice.Title.EscapeMarkup(),
+            theme.Dim,
+            suffix.EscapeMarkup(),
+            trailing));
+    }
+
+    private static Markup BuildInputMarkup(string buffer, bool showArrow, ThemeColors theme)
+    {
+        string cursor = showArrow ? "▏" : " ";
+        return new Markup(string.Format(
+            CultureInfo.InvariantCulture,
+            "[{0}]> [/][{1}]{2}[/][{0}]{3}[/]",
+            theme.Dim,
+            theme.Accent,
+            buffer.EscapeMarkup(),
+            cursor));
+    }
+
+    private static void AppendDerived(List<IRenderable> rows, IReadOnlyList<DetailLine> lines, int indent, ThemeColors theme)
+    {
+        foreach (DetailLine line in lines)
+        {
+            rows.Add(Indent(BuildDetailLine(line, theme), indent));
+        }
+    }
+
+    private static Markup HelpMarkup(string text, ThemeColors theme) =>
+        new($"[{theme.Dim} italic]{text.EscapeMarkup()}[/]");
+
+    private static Markup BuildDetailLine(DetailLine line, ThemeColors theme)
+    {
+        if (line.Value is null)
+        {
+            return new Markup($"[{theme.Dim}]{line.Label.EscapeMarkup()}[/]");
+        }
+
+        return new Markup(string.Format(
+            CultureInfo.InvariantCulture,
+            "[{0}]{1}[/] [{2}]{3}[/]",
+            theme.Dim,
+            line.Label.EscapeMarkup(),
+            theme.Accent,
+            line.Value.EscapeMarkup()));
     }
 
     private static Markup BuildAcceptRow(bool focused, bool showArrow, ThemeColors theme)
@@ -199,96 +377,20 @@ internal static class InteractiveFormSelector
         return new Markup($"[{theme.Dim}]  {accept.EscapeMarkup()}[/]");
     }
 
-    private static Rows BuildEditView(InitFormModel model, FormSelectorState state, bool showArrow)
+    private static Markup BuildLegend(FormMode mode, ThemeColors theme)
     {
-        ThemeColors theme = DotnetupTheme.Current;
-        FormField editing = state.FocusedField!;
-
-        var rows = new List<IRenderable>
+        string text = mode switch
         {
-            DotnetBotBanner.BuildPanel(),
-            Text.Empty,
+            FormMode.EditingCustomText => "type a channel · Enter confirm · Esc back",
+            FormMode.EditingField => "↑/↓ choose · Enter select · Esc back",
+            _ => "↑/↓ move · Enter edit/accept · Esc quit",
         };
 
-        rows.AddRange(BuildEditContextRows(model, editing, theme));
-        rows.Add(new Markup($"[bold {theme.Brand}]{("Select " + editing.Label).EscapeMarkup()}[/]"));
-        rows.Add(Text.Empty);
-
-        for (int i = 0; i < editing.Choices.Count; i++)
-        {
-            rows.Add(BuildChoiceRow(editing, i, state.EditChoiceIndex == i, showArrow, theme));
-        }
-
-        rows.Add(Text.Empty);
-        rows.Add(BuildHelperPanel(editing.Choices[state.EditChoiceIndex], theme));
-        rows.Add(Text.Empty);
-        rows.Add(BuildLegend("↑/↓ choose · Enter select · Esc back", theme));
-
-        return new Rows(rows);
+        return new Markup($"[{theme.Dim}]{text.EscapeMarkup()}[/]");
     }
 
-    // Collapsed, dimmed one-liners for the fields not being edited, so the user keeps their place.
-    private static List<IRenderable> BuildEditContextRows(InitFormModel model, FormField editing, ThemeColors theme)
-    {
-        int labelWidth = MaxLabelWidth(model);
-        var rows = new List<IRenderable>();
-
-        foreach (FormField field in model.Fields)
-        {
-            if (!ReferenceEquals(field, editing))
-            {
-                rows.Add(new Markup(string.Format(
-                    CultureInfo.InvariantCulture,
-                    "[{0}]  {1}  {2}[/]",
-                    theme.Dim,
-                    field.Label.PadRight(labelWidth).EscapeMarkup(),
-                    field.Selected.Title.EscapeMarkup())));
-            }
-        }
-
-        rows.Add(Text.Empty);
-        return rows;
-    }
-
-    private static Markup BuildChoiceRow(FormField editing, int index, bool selected, bool showArrow, ThemeColors theme)
-    {
-        FieldChoice choice = editing.Choices[index];
-        string suffix = index == editing.DefaultIndex ? "  (default)" : string.Empty;
-
-        if (selected)
-        {
-            string arrow = showArrow ? "> " : "  ";
-            return new Markup(string.Format(
-                CultureInfo.InvariantCulture,
-                "[{0} bold]{1}{2}[/][{3}]{4}[/]",
-                theme.Accent,
-                arrow.EscapeMarkup(),
-                choice.Title.EscapeMarkup(),
-                theme.Dim,
-                suffix.EscapeMarkup()));
-        }
-
-        return new Markup(string.Format(
-            CultureInfo.InvariantCulture,
-            "[{0}]  {1}{2}[/]",
-            theme.Dim,
-            choice.Title.EscapeMarkup(),
-            suffix.EscapeMarkup()));
-    }
-
-    private static Panel BuildHelperPanel(FieldChoice choice, ThemeColors theme)
-    {
-        return new Panel(new Markup(choice.HelperText.EscapeMarkup()))
-        {
-            Border = BoxBorder.Rounded,
-            BorderStyle = Style.Parse(theme.Dim),
-            Header = new PanelHeader($" {choice.Title.EscapeMarkup()} "),
-            Padding = new Padding(1, 0),
-        };
-    }
-
-    private static Markup BuildLegend(string text, ThemeColors theme) =>
-        new($"[{theme.Dim}]{text.EscapeMarkup()}[/]");
+    private static Padder Indent(IRenderable content, int left) =>
+        new(content, new Padding(left, 0, 0, 0));
 
     private static void RenderFinal(InitFormModel model, bool accepted)
     {
@@ -306,11 +408,10 @@ internal static class InteractiveFormSelector
             string valueColor = field.IsChangedFromDefault ? theme.Warning : theme.Accent;
             AnsiConsole.MarkupLine(string.Format(
                 CultureInfo.InvariantCulture,
-                "  [{0}]{1}[/]  [{2}]{3}[/]",
-                theme.Dim,
+                "  [white]{0}[/]  [{1}]{2}[/]",
                 field.Label.PadRight(labelWidth).EscapeMarkup(),
                 valueColor,
-                field.Selected.Title.EscapeMarkup()));
+                field.DisplayValue.EscapeMarkup()));
         }
     }
 

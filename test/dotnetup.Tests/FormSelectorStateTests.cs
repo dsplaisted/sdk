@@ -145,4 +145,99 @@ public class FormSelectorStateTests
         state.Mode.Should().Be(FormMode.Form);
         state.IsDone.Should().BeFalse();
     }
+
+    private static List<FormField> FieldsWithCustom() =>
+    [
+        new FormField(
+            "Channel",
+            [new FieldChoice("a", ""), new FieldChoice("custom", "", IsCustomInput: true)],
+            defaultIndex: 0),
+    ];
+
+    [Fact]
+    public void Enter_OnCustomChoice_OpensTextEntry()
+    {
+        var state = new FormSelectorState(FieldsWithCustom());
+        state.MoveUp();   // focus the field
+        state.Enter();    // edit
+        state.MoveDown(); // highlight the custom choice
+
+        state.Enter();
+
+        state.Mode.Should().Be(FormMode.EditingCustomText);
+        state.CustomTextBuffer.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TypingThenEnter_CommitsCustomValue()
+    {
+        var fields = FieldsWithCustom();
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();
+        state.MoveDown();
+        state.Enter(); // text entry
+
+        state.AppendChar('8');
+        state.AppendChar('.');
+        state.AppendChar('0');
+        state.Backspace();
+        state.AppendChar('1');
+        state.Enter(); // commit "8.1"
+
+        state.Mode.Should().Be(FormMode.Form);
+        fields[0].CustomValue.Should().Be("8.1");
+        fields[0].DisplayValue.Should().Be("8.1");
+        fields[0].IsChangedFromDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EmptyEnter_InTextEntry_ReturnsToChoiceList()
+    {
+        var fields = FieldsWithCustom();
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();
+        state.MoveDown();
+        state.Enter(); // text entry
+
+        state.Enter(); // nothing typed
+
+        state.Mode.Should().Be(FormMode.EditingField);
+        fields[0].CustomValue.Should().BeNull();
+    }
+
+    [Fact]
+    public void Cancel_InTextEntry_ReturnsToChoiceList_WithoutCommitting()
+    {
+        var fields = FieldsWithCustom();
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();
+        state.MoveDown();
+        state.Enter();
+        state.AppendChar('x');
+
+        state.Cancel();
+
+        state.Mode.Should().Be(FormMode.EditingField);
+        state.CustomTextBuffer.Should().BeEmpty();
+        fields[0].CustomValue.Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectingFixedChoice_ClearsPreviousCustomValue()
+    {
+        var fields = FieldsWithCustom();
+        fields[0].SetCustomValue(1, "9.9");
+        var state = new FormSelectorState(fields);
+        state.MoveUp();
+        state.Enter();   // edit (highlight starts at current selection = custom index 1)
+        state.MoveUp();  // highlight choice 0 (fixed)
+        state.Enter();   // commit fixed
+
+        fields[0].SelectedIndex.Should().Be(0);
+        fields[0].CustomValue.Should().BeNull();
+        fields[0].DisplayValue.Should().Be("a");
+    }
 }
