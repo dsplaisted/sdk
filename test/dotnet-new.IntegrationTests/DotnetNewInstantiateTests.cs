@@ -37,6 +37,14 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .ExitWith(0)
                 .And
                 .NotHaveStdErr();
+
+            new DotnetNewCommand(log, "install", TemplatePackagesPaths.MicrosoftDotNetCommonProjectTemplates110Path)
+                .WithCustomHive(s_mstestTemplateSelectionHome)
+                .Execute()
+                .Should()
+                .ExitWith(0)
+                .And
+                .NotHaveStdErr();
         }
 
         [ClassCleanup]
@@ -61,6 +69,57 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .ExitWith(0)
                 .And.NotHaveStdErr()
                 .And.HaveStdOutContaining("The template \"Console App\" was created successfully.");
+        }
+
+        [TestMethod]
+        [DataRow("console", "C#", "csproj")]
+        [DataRow("console", "F#", "fsproj")]
+        [DataRow("console", "VB", "vbproj")]
+        [DataRow("classlib", "C#", "csproj")]
+        [DataRow("classlib", "F#", "fsproj")]
+        [DataRow("classlib", "VB", "vbproj")]
+        [DataRow("mstest", "C#", "csproj")]
+        [DataRow("mstest", "F#", "fsproj")]
+        [DataRow("mstest", "VB", "vbproj")]
+        [DataRow("nunit", "C#", "csproj")]
+        [DataRow("nunit", "F#", "fsproj")]
+        [DataRow("nunit", "VB", "vbproj")]
+        [DataRow("xunit", "C#", "csproj")]
+        [DataRow("xunit", "F#", "fsproj")]
+        [DataRow("xunit", "VB", "vbproj")]
+        [DataRow("nunit-playwright", "C#", "csproj")]
+        [DataRow("mstest-playwright", "C#", "csproj")]
+        [DataRow("web", "C#", "csproj")]
+        [DataRow("webapi", "C#", "csproj")]
+        [DataRow("mvc", "C#", "csproj")]
+        [DataRow("mvc", "F#", "fsproj")]
+        [DataRow("webapp", "C#", "csproj")]
+        [DataRow("blazor", "C#", "csproj")]
+        [DataRow("blazorwasm", "C#", "csproj")]
+        [DataRow("mcpserver", "C#", "csproj")]
+        [ResourceLock(nameof(DotnetBuildCommand))]
+        public void BundledProjectTemplates_DefaultToCurrentFrameworkAndBuild(string templateName, string language, string projectExtension)
+        {
+            const string projectName = "TemplateProject";
+            string workingDirectory = CreateTemporaryFolder(folderName: $"{templateName}-{language}");
+            string outputDirectory = Path.Combine(workingDirectory, projectName);
+
+            new DotnetNewCommand(_log, templateName, "--no-restore", "--language", language, "--name", projectName, "--output", outputDirectory)
+                .WithCustomHive(s_mstestTemplateSelectionHome)
+                .WithWorkingDirectory(workingDirectory)
+                .Execute()
+                .Should()
+                .Pass()
+                .And.NotHaveStdErr();
+
+            string projectContents = File.ReadAllText(Path.Combine(outputDirectory, $"{projectName}.{projectExtension}"));
+            projectContents.Should().Contain($"<TargetFramework>{ToolsetInfo.DefaultTemplateTargetFramework}</TargetFramework>");
+
+            new DotnetBuildCommand(_log)
+                .WithWorkingDirectory(outputDirectory)
+                .Execute(BinLogArgument([templateName, language]))
+                .Should()
+                .Pass();
         }
 
         [TestMethod]

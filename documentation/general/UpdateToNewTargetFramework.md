@@ -160,7 +160,9 @@ Update task/tool lookup paths and TFM-specific API baselines with the source out
 Keep paths into externally produced packages, such as F# and WindowsDesktop, on their
 actual packaged TFM until those producers retarget. Distinguish the compiled SDK TFM
 from generated test-app defaults in
-[`ToolsetInfo.cs`](../../test/Microsoft.NET.TestFramework/ToolsetInfo.cs).
+[`ToolsetInfo.cs`](../../test/Microsoft.NET.TestFramework/ToolsetInfo.cs), including
+`DefaultTemplateTargetFramework` when the bundled templates advance. Test assets
+may temporarily retain an older `CurrentTargetFramework` independently.
 
 Also preserve compatibility for SDK packages consumed by other repositories during
 stage-2 source-build. For example,
@@ -175,6 +177,15 @@ hide this mismatch by consuming older, previously-source-built packages.
 - Flow netN runtime, WindowsDesktop, and ASP.NET Core dependencies.
 - Update `global.json` separately to a bootstrap SDK build that supports targeting netN.
 - Update restore-toolset inputs for the `N-1` runtime where required.
+
+Package and SDK version branding is not proof of netN targeting support. Inspect the
+consumed `Microsoft.NETCore.App.Ref` package's `data/FrameworkList.xml`: its
+`TargetFrameworkVersion` must be `N.0`. The layout's
+[`GenerateBundledVersionsProps`](../../src/Layout/redist/targets/GenerateBundledVersions.targets)
+reads that attribute to generate `NETCoreAppMaximumVersion` and the bundled/current
+TFM. Inspect the generated props and build an unmodified netN template project before
+advancing defaults; a bootstrap update alone does not raise the built SDK's targeting
+limit.
 
 Do not hand-edit generated dependency-flow properties. Follow the repository's
 dependency-flow process so versions, manifests, and feeds remain consistent.
@@ -212,16 +223,27 @@ If the bundled SDK still supports only `N-1`, also keep the bundled web/MCP temp
 and test-app ASP.NET package references on `N-1`: netN templates generate projects
 that the bundled SDK cannot build, and netN ASP.NET packages may no longer support
 net(N-1) test apps. Keep the temporary versions in `eng/ManualVersions.props` rather
-than changing Maestro-generated dependency versions, and advance them together once
-the SDK supports targeting netN. The Windows SDK bundle must also select the template
+than changing Maestro-generated dependency versions. Once the SDK supports targeting
+netN and the producer packages are available, restore the web/MCP package IDs and
+versions to the normally flowing dependencies. Keep any ASP.NET test-package pin until
+the corresponding test apps are retargeted. Check the WindowsDesktop template packages
+independently; their defaults can lag behind the common and web templates even when
+their package versions advance. The Windows SDK bundle must also select the template
 MSI for `TemplateFrameworkVersion`, which can differ from the SDK's product version
 during this transition. Keep the shared MSI filename aligned for the SDK bundle and
 Visual Studio redist package ([`GenerateMSIs.targets`](../../src/Layout/redist/targets/GenerateMSIs.targets),
 [`VS.Redist.Common.NetCore.Templates.proj`](../../src/Layout/VS.Redist.Common.NetCore.Templates/VS.Redist.Common.NetCore.Templates.proj)).
 
-Default-template tests should compare against `ToolsetInfo.CurrentTargetFramework`,
-not the newest installed runtime, which can already be netN during this transition
+Common and web default-template tests should compare against
+`ToolsetInfo.DefaultTemplateTargetFramework`, not the newest installed runtime,
+which can already be netN during this transition
 (see [`ProjectBuildTests`](../../test/EndToEnd.Tests/ProjectBuildTests.cs)).
+
+Before validating an incremental rollover build, check the shipping package directory
+and the redist `templates` directory for obsolete template packages.
+[`GetRepoTemplates`](../../src/Layout/redist/targets/BundledTemplates.targets) collects
+matching packages from the shipping directory; leftovers from earlier builds can add
+unintended framework choices to template help.
 
 ### 6. Unwind temporary transition changes
 

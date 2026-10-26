@@ -186,7 +186,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
         [DataRow(new object[] { "console", "VB" })]
         public async Task AotVariants(string name, string language)
         {
-            string currentDefaultFramework = ToolsetInfo.CurrentTargetFramework;
+            string currentDefaultFramework = ToolsetInfo.DefaultTemplateTargetFramework;
 
             string workingDir = CreateTemporaryFolder(folderName: $"{name}-{language}");
             string outputDir = "MyProject";
@@ -356,7 +356,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             bool supportsImplicitUsings,
             bool supportsFileScopedNs)
         {
-            string currentDefaultFramework = ToolsetInfo.CurrentTargetFramework;
+            string currentDefaultFramework = ToolsetInfo.DefaultTemplateTargetFramework;
 
             string workingDir = CreateTemporaryFolder(folderName: $"{name}-{langVersion ?? "null"}-{framework ?? "null"}");
             string outputDir = "MyProject";

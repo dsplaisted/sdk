@@ -18,6 +18,12 @@ only a test project can leave production assemblies or targets in that layout st
 product-layout freshness decision and invokes area-specific deployment workflows where
 applicable.
 
+Template rollovers also need an inventory check: the redist template directories and
+the shipping-package glob in
+[`GetRepoTemplates`](../../src/Layout/redist/targets/BundledTemplates.targets) can pick
+up packages left by earlier builds. See the
+[rollover validation guidance](../../documentation/general/UpdateToNewTargetFramework.md#5-advance-product-defaults-tests-and-templates).
+
 ## A Reused App Tree Can Serve Stale WebAssembly Runtime Assets
 
 **Affected area:** Manual validation of `dotnet watch` / Blazor WebAssembly against a
