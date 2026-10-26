@@ -109,11 +109,7 @@ files only when no remaining requirement needs them.
 To use a different SDK instead, update `sdk.version` and run
 `dotnetup sdk install` from the repository directory.
 
-You can also remove its tracked registration explicitly:
-
-```dotnetcli
-dotnetup sdk uninstall 10.0.1xx --source globaljson
-```
+`dotnetup sdk uninstall` does not remove repository requirements.
 
 ## See also
 

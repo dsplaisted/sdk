@@ -93,13 +93,8 @@ requirement, remove `sdk.version` or delete `global.json` if the file is no long
 needed. Dotnetup picks up these changes during garbage collection and removes
 unused installations.
 
-You can also remove the tracked registration explicitly using its channel:
-
-```dotnetcli
-dotnetup sdk uninstall 10.0.1xx --source globaljson
-```
-
-Use `dotnetup list` to find the `global.json` path.
+`dotnetup sdk uninstall` removes command-line and migration requirements, not
+repository requirements. Use `dotnetup list` to find the `global.json` path.
 
 If `global.json` cannot be read or contains an invalid SDK requirement, dotnetup
 reports a warning and uses the last successfully resolved requirement for update
