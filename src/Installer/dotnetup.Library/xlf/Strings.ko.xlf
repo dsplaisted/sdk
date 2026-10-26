@@ -331,6 +331,26 @@ Or open a new terminal.</target>
         <target state="new">Removing unused installations...</target>
         <note />
       </trans-unit>
+      <trans-unit id="GlobalJsonInvalidContents">
+        <source>Expected a JSON object.</source>
+        <target state="new">Expected a JSON object.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalJsonInvalidRollForward">
+        <source>Invalid rollForward policy: '{0}'.</source>
+        <target state="new">Invalid rollForward policy: '{0}'.</target>
+        <note>{Locked="rollForward"}</note>
+      </trans-unit>
+      <trans-unit id="GlobalJsonInvalidSdkVersion">
+        <source>Invalid SDK version: '{0}'.</source>
+        <target state="new">Invalid SDK version: '{0}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalJsonMissingPath">
+        <source>The registration does not contain a global.json path.</source>
+        <target state="new">The registration does not contain a global.json path.</target>
+        <note>{Locked="global.json"}</note>
+      </trans-unit>
       <trans-unit id="HelpConfigCommandsTitle">
         <source>Configuration Commands:</source>
         <target state="new">Configuration Commands:</target>
@@ -391,6 +411,11 @@ Or open a new terminal.</target>
         <target state="new">Configure or reconfigure dotnetup settings and install .NET through the interactive setup flow.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallSpecRequirementError">
+        <source>Warning: Cannot read {0}: {1}</source>
+        <target state="new">Warning: Cannot read {0}: {1}</target>
+        <note>0: global.json path, 1: error details.</note>
+      </trans-unit>
       <trans-unit id="InstallSpecSource">
         <source>(source: {0})</source>
         <target state="new">(source: {0})</target>
@@ -435,6 +460,11 @@ Or open a new terminal.</target>
         <source>{0} (invalid)</source>
         <target state="new">{0} (invalid)</target>
         <note>0: installed version.</note>
+      </trans-unit>
+      <trans-unit id="ListMigrationSource">
+        <source>Migration</source>
+        <target state="new">Migration</target>
+        <note />
       </trans-unit>
       <trans-unit id="ListNoInstallations">
         <source>(none)</source>
