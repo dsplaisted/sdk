@@ -396,6 +396,11 @@ Or open a new terminal.</target>
         <target state="new">(source: {0})</target>
         <note>{0} is an install-source identifier or a global.json path.</note>
       </trans-unit>
+      <trans-unit id="ListAspNetCoreRuntimeComponent">
+        <source>ASP.NET Core Runtime</source>
+        <target state="new">ASP.NET Core Runtime</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ListCommandDescription">
         <source>List installed .NET SDKs and runtimes managed by dotnetup.</source>
         <target state="new">List installed .NET SDKs and runtimes managed by dotnetup.</target>
@@ -409,6 +414,11 @@ Or open a new terminal.</target>
       <trans-unit id="ListComponentColumn">
         <source>Component</source>
         <target state="new">Component</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListDesktopRuntimeComponent">
+        <source>.NET Desktop Runtime</source>
+        <target state="new">.NET Desktop Runtime</target>
         <note />
       </trans-unit>
       <trans-unit id="ListInstallationCount">
