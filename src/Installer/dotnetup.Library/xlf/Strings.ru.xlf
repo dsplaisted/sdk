@@ -402,8 +402,8 @@ Or open a new terminal.</target>
         <note />
       </trans-unit>
       <trans-unit id="ListCommandLineSource">
-        <source>Command line</source>
-        <target state="new">Command line</target>
+        <source>Command</source>
+        <target state="new">Command</target>
         <note />
       </trans-unit>
       <trans-unit id="ListComponentColumn">
