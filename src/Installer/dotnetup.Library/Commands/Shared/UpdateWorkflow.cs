@@ -16,10 +16,12 @@ namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Shared;
 internal class UpdateWorkflow
 {
     private readonly ChannelVersionResolver _channelVersionResolver;
+    private readonly IInstallationValidator _installationValidator;
 
-    public UpdateWorkflow(ChannelVersionResolver channelVersionResolver)
+    public UpdateWorkflow(ChannelVersionResolver channelVersionResolver, IInstallationValidator? installationValidator = null)
     {
         _channelVersionResolver = channelVersionResolver;
+        _installationValidator = installationValidator ?? new InstallationValidator();
     }
 
     /// <summary>
@@ -173,9 +175,9 @@ internal class UpdateWorkflow
             spec.AllowPrerelease = channel.AllowPrerelease;
             new DotnetupSharedManifest(manifestPath).AddInstallSpec(installRoot, spec);
         }
-        // Skip standalone exact-version specs. Exact global.json specs still need processing
-        // because the requested version may have changed in the file.
-        if (channel.IsFullySpecifiedVersion() && spec.InstallSource != InstallSource.GlobalJson)
+        // Pins do not advance, but an interrupted removal still needs repair.
+        if (channel.IsFullySpecifiedVersion() && spec.InstallSource != InstallSource.GlobalJson &&
+            !root.Installations.Any(i => i.RemovalPending && i.Component == spec.Component && i.Version == channel.Name))
         {
             return false;
         }
@@ -197,15 +199,18 @@ internal class UpdateWorkflow
         // If the manifest says it's installed, validate on disk. If missing, remove the stale record.
         if (alreadyInstalled)
         {
-            InstallationValidator validator = new();
-            if (!validator.Validate(existingInstallation!.ToDotnetInstall(installRoot)))
+            if (existingInstallation!.RemovalPending ||
+                !_installationValidator.Validate(existingInstallation.ToDotnetInstall(installRoot)))
             {
                 var manifest = new DotnetupSharedManifest(manifestPath);
-                manifest.RemoveInstallation(installRoot, new Installation
+                if (!existingInstallation.RemovalPending)
                 {
-                    Component = existingInstallation!.Component,
-                    Version = existingInstallation.Version
-                });
+                    manifest.RemoveInstallation(installRoot, new Installation
+                    {
+                        Component = existingInstallation.Component,
+                        Version = existingInstallation.Version
+                    });
+                }
                 alreadyInstalled = false;
             }
         }

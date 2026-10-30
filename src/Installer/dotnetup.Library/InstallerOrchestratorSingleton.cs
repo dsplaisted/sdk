@@ -417,6 +417,10 @@ internal class InstallerOrchestratorSingleton
                 return new InstallResult(prepared.Install, WasAlreadyInstalled: true);
             }
 
+            if (manifest is not null && prepared.Artifact is DotnetArchiveExtractor extractor)
+            {
+                extractor.SubcomponentsToRepair.UnionWith(manifest.GetIncompleteSubcomponents(prepared.Request.InstallRoot));
+            }
             prepared.Artifact.Commit();
 
             repaired = prepared.Artifact.RequiresPostInstallValidation
@@ -484,7 +488,7 @@ internal class InstallerOrchestratorSingleton
             .Select(spec => $"'{spec.GlobalJsonPath}'").Distinct().ToList();
         if (repositoryPaths.Count > 0)
         {
-            actions.Add($"{Strings.UninstallRepositoryRequirement} {string.Join(", ", repositoryPaths)}");
+            actions.Add($"{Strings.InstallLayoutConflictRepositoryRequirement} {string.Join(", ", repositoryPaths)}");
         }
 
         return string.Join(" ", actions);

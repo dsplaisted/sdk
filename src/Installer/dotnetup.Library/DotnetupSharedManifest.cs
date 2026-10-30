@@ -94,9 +94,8 @@ internal class DotnetupSharedManifest : IDotnetupManifest
     }
 
     /// <summary>
-    /// Reads the manifest without pruning. Exposed only for tests that need
-    /// to inspect raw manifest data without filesystem side-effects.
-    /// Production code should always use <see cref="ReadManifest(bool)"/>.
+    /// Reads the manifest without pruning, for uninstall planning and recovery
+    /// that must preserve specs and incomplete installation records.
     /// </summary>
     internal DotnetupManifestData ReadManifestWithoutPruning() => ReadManifestCore();
 
@@ -458,9 +457,15 @@ internal class DotnetupSharedManifest : IDotnetupManifest
         var manifest = ReadManifestCore();
         var root = GetOrAddDotnetRoot(manifest, installRoot.Path, installRoot.Architecture);
 
-        // Don't add duplicate installations
-        if (!root.Installations.Any(i => i.Component == installation.Component && i.Version == installation.Version))
+        var existing = root.Installations.FirstOrDefault(i =>
+            i.Component == installation.Component && i.Version == installation.Version);
+        if (existing is null)
         {
+            root.Installations.Add(installation);
+        }
+        else if (existing.RemovalPending)
+        {
+            root.Installations.RemoveAll(i => i.Component == installation.Component && i.Version == installation.Version);
             root.Installations.Add(installation);
         }
 
@@ -501,7 +506,7 @@ internal class DotnetupSharedManifest : IDotnetupManifest
         // The only case where two installs may be found would be if a RTM version was installed, got promoted to a full build, and then the same .version became "GA"
         // This is true with 10.0.100 GA which has 10.0.100-rtm.25523.111 and the actual GA. 
         return root?.Installations.FirstOrDefault(existing =>
-            existing.Component == install.Component &&
+            existing.Component == install.Component && !existing.RemovalPending &&
             (existing.Version == version || (matchLayoutVersion && existing.LayoutVersion == version)))?
             .ToDotnetInstall(install.InstallRoot);
     }
@@ -529,6 +534,20 @@ internal class DotnetupSharedManifest : IDotnetupManifest
             .Where(spec => InstallSpecResolver.Resolve(spec, root.Installations).Installation is { } kept && conflicts.Contains(kept))
             .ToList();
         return (conflicts, owningSpecs);
+    }
+
+    internal HashSet<string> GetIncompleteSubcomponents(DotnetInstallRoot installRoot)
+    {
+        var root = ReadManifestCore().DotnetRoots.FirstOrDefault(r =>
+            DotnetupUtilities.PathsEqual(r.Path, installRoot.Path) && r.Architecture == installRoot.Architecture);
+        if (root is null)
+        {
+            return [];
+        }
+        var protectedPaths = root.Installations.Where(i => !i.RemovalPending).SelectMany(i => i.Subcomponents)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return root.Installations.Where(i => i.RemovalPending).SelectMany(i => i.Subcomponents)
+            .Where(path => !protectedPaths.Contains(path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -598,7 +617,8 @@ internal class DotnetupSharedManifest : IDotnetupManifest
     /// <summary>
     /// Checks each installation across all roots and removes entries whose
     /// on-disk component directory no longer exists. Roots whose directory
-    /// no longer exists are removed entirely. Writes the manifest if any
+    /// no longer exists are removed only if they have no specs or incomplete removals.
+    /// Writes the manifest if any
     /// entries were pruned, unless persistence is disabled for a preview.
     /// </summary>
     internal DotnetupManifestData PruneStaleInstallations(DotnetupManifestData manifest, bool persist = true)
@@ -607,7 +627,9 @@ internal class DotnetupSharedManifest : IDotnetupManifest
 
         // Remove entire roots whose directory no longer exists.
         int removedRoots = manifest.DotnetRoots.RemoveAll(root =>
-            !string.IsNullOrEmpty(root.Path) && !Directory.Exists(root.Path));
+            !string.IsNullOrEmpty(root.Path) && !Directory.Exists(root.Path)
+                && root.InstallSpecs.Count == 0
+                && !root.Installations.Any(i => i.RemovalPending));
         if (removedRoots > 0)
         {
             anyPruned = true;
@@ -622,7 +644,7 @@ internal class DotnetupSharedManifest : IDotnetupManifest
             }
 
             int removed = root.Installations.RemoveAll(installation =>
-                !InstallationExistsOnDisk(root.Path, installation));
+                !installation.RemovalPending && !InstallationExistsOnDisk(root.Path, installation));
 
             if (removed > 0)
             {
@@ -643,7 +665,9 @@ internal class DotnetupSharedManifest : IDotnetupManifest
     /// still exists under <paramref name="rootPath"/>.
     /// </summary>
     private static bool InstallationExistsOnDisk(string rootPath, Installation installation) =>
-        !string.IsNullOrEmpty(installation.Version)
-            && Directory.Exists(Path.Combine(rootPath, installation.LayoutPath.Replace('/', Path.DirectorySeparatorChar)));
+        Directory.Exists(GetComponentDirectory(rootPath, installation));
 
+    internal static string? GetComponentDirectory(string rootPath, Installation installation) =>
+        string.IsNullOrEmpty(installation.Version) ? null
+            : Path.Combine(rootPath, installation.LayoutPath.Replace('/', Path.DirectorySeparatorChar));
 }

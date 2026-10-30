@@ -79,4 +79,6 @@ internal class Installation
         ProductVersion = install.ProductVersion?.ToString(),
         Subcomponents = [.. subcomponents],
     };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RemovalPending { get; set; }
 }

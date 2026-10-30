@@ -47,7 +47,7 @@ internal static class StagedTarArchiveCommitter
             context.OnEntryExtracted?.Invoke(archiveEntryName);
 
             string destination = Path.Combine(context.TargetDirectory, relativePath);
-            if (context.ShouldSkipEntry?.Invoke(archiveEntryName) == true || Directory.Exists(destination))
+            if (context.ShouldSkipEntry?.Invoke(archiveEntryName) ?? Directory.Exists(destination))
             {
                 // Remove skipped content before the remaining staging tree is merged. Leaving it
                 // here would overwrite the existing live subcomponent during the merge below.
@@ -55,8 +55,10 @@ internal static class StagedTarArchiveCommitter
                 continue;
             }
 
+            // An explicit false from the predicate also permits repairing an existing,
+            // incomplete subcomponent, matching managed tar and zip extraction.
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            MoveDirectoryWithRetry(subdirectory, destination);
+            MergeDirectory(subdirectory, destination);
         }
 
         if (Directory.Exists(stagedInstallRootSubdirectory))

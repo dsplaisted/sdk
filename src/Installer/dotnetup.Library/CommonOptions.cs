@@ -125,12 +125,33 @@ internal class CommonOptions
         Arity = ArgumentArity.ZeroOrOne
     };
 
+    public static readonly Option<bool> RemoveInstallSpecsOption = new("--remove-install-specs")
+    {
+        Description = Strings.UninstallRemoveSpecsOption,
+        Arity = ArgumentArity.Zero
+    };
+
+    public static readonly Option<bool> KeepInstallSpecsOption = new("--keep-install-specs")
+    {
+        Description = Strings.UninstallKeepSpecsOption,
+        Arity = ArgumentArity.Zero
+    };
+
     public static void AddUninstallOptions(Command command)
     {
         command.Options.Add(ManifestPathOption);
         command.Options.Add(InstallPathOption);
         command.Options.Add(InteractiveOption);
         command.Options.Add(NonInteractiveOption);
+        command.Options.Add(RemoveInstallSpecsOption);
+        command.Options.Add(KeepInstallSpecsOption);
+        command.Validators.Add(result =>
+        {
+            if (result.GetValue(RemoveInstallSpecsOption) && result.GetValue(KeepInstallSpecsOption))
+            {
+                result.AddError(Strings.UninstallConflictingOptions);
+            }
+        });
     }
 
     /// <summary>

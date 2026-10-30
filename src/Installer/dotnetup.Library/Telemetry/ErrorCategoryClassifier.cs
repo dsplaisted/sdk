@@ -71,6 +71,7 @@ internal static class ErrorCategoryClassifier
             DotnetInstallErrorCode.InstallFailed => ErrorCategory.Product,
             DotnetInstallErrorCode.PlatformNotSupported => ErrorCategory.User,
             DotnetInstallErrorCode.UninstallTargetNotFound => ErrorCategory.User,
+            DotnetInstallErrorCode.UninstallFailed => ErrorCategory.User,
             DotnetInstallErrorCode.UnsignedDownloadBlockedByPolicy => ErrorCategory.User,
             DotnetInstallErrorCode.AdminModeSignatureRequired => ErrorCategory.User,
             DotnetInstallErrorCode.NoUserInstallableArtifact => ErrorCategory.User,
@@ -128,6 +129,7 @@ internal static class ErrorCategoryClassifier
     {
         return errorCode is
             DotnetInstallErrorCode.ExtractionFailed or
+            DotnetInstallErrorCode.UninstallFailed or
             DotnetInstallErrorCode.LocalManifestError;
     }
 

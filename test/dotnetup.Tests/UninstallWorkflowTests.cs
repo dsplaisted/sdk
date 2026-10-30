@@ -168,13 +168,13 @@ public class UninstallWorkflowTests
         var root = new DotnetInstallRoot(environment.InstallPath, InstallArchitecture.x64);
         AddInstallation(environment, manifest, root, component, version);
         AddSpec(manifest, root, component, "8");
-        AddSpec(manifest, root, component, version);
+        AddSpec(manifest, root, component, "8.0");
         var before = File.ReadAllText(environment.ManifestPath);
         var prompted = false;
 
         Action uninstall = () => UninstallWorkflow.Execute(
-            environment.ManifestPath, environment.InstallPath, "8", component,
-            interactive: true, confirm: () => { prompted = true; return ConfirmResult.No; });
+            environment.ManifestPath, environment.InstallPath, version, component,
+            interactive: true, chooseAction: () => { prompted = true; return UninstallAction.Cancel; });
 
         uninstall.Should().Throw<DotnetInstallException>()
             .Which.ErrorCode.Should().Be(DotnetInstallErrorCode.OperationCancelled);
@@ -195,14 +195,14 @@ public class UninstallWorkflowTests
         AddSpec(manifest, root, InstallComponent.SDK, "8.0.100");
 
         UninstallWorkflow.Execute(environment.ManifestPath, environment.InstallPath, "8",
-            InstallComponent.SDK, interactive: true, confirm: () => ConfirmResult.Yes);
+            InstallComponent.SDK, interactive: true, chooseAction: () => throw new AssertFailedException("Unexpected prompt."));
 
         manifest.GetInstallations(root).Should().ContainSingle();
         manifest.GetInstallSpecs(root).Should().ContainSingle().Which.VersionOrChannel.Should().Be("8.0.100");
     }
 
     [TestMethod]
-    public void Execute_OlderMatchingInstallationIsRetained_StillPrompts()
+    public void Execute_OlderMatchingInstallationIsRetained_DoesNotPromptForSpecRemoval()
     {
         using var environment = new TestEnvironment();
         using var mutex = new ScopedMutex(Constants.MutexNames.ModifyInstallationStates);
@@ -212,17 +212,12 @@ public class UninstallWorkflowTests
         AddInstallation(environment, manifest, root, InstallComponent.SDK, "8.0.101");
         AddSpec(manifest, root, InstallComponent.SDK, "8");
         AddSpec(manifest, root, InstallComponent.SDK, "8.0.100");
-        var before = File.ReadAllText(environment.ManifestPath);
-        var prompted = false;
-
-        Action uninstall = () => UninstallWorkflow.Execute(
+        UninstallWorkflow.Execute(
             environment.ManifestPath, environment.InstallPath, "8", InstallComponent.SDK,
-            interactive: true, confirm: () => { prompted = true; return ConfirmResult.No; });
+            interactive: true, chooseAction: () => throw new AssertFailedException("Unexpected prompt."));
 
-        uninstall.Should().Throw<DotnetInstallException>()
-            .Which.ErrorCode.Should().Be(DotnetInstallErrorCode.OperationCancelled);
-        prompted.Should().BeTrue();
-        File.ReadAllText(environment.ManifestPath).Should().Be(before);
+        manifest.GetInstallations(root).Should().ContainSingle().Which.Version.Should().Be("8.0.100");
+        manifest.GetInstallSpecs(root).Should().ContainSingle().Which.VersionOrChannel.Should().Be("8.0.100");
     }
 
     [TestMethod]
@@ -246,7 +241,7 @@ public class UninstallWorkflowTests
 
         Action uninstall = () => UninstallWorkflow.Execute(
             environment.ManifestPath, environment.InstallPath, "9", InstallComponent.SDK,
-            interactive: true, confirm: () => { prompted = true; return ConfirmResult.No; });
+            interactive: true, chooseAction: () => { prompted = true; return UninstallAction.Cancel; });
 
         uninstall.Should().Throw<DotnetInstallException>()
             .Which.ErrorCode.Should().Be(DotnetInstallErrorCode.UninstallTargetNotFound);
@@ -263,7 +258,7 @@ public class UninstallWorkflowTests
         var root = new DotnetInstallRoot(environment.InstallPath, InstallArchitecture.x64);
         AddInstallation(environment, manifest, root, InstallComponent.SDK, "8.0.100");
         AddSpec(manifest, root, InstallComponent.SDK, "8");
-        AddSpec(manifest, root, InstallComponent.SDK, "8.0.100");
+        AddSpec(manifest, root, InstallComponent.SDK, "8.0");
         manifest.AddInstallSpec(root, new InstallSpec
         {
             Component = InstallComponent.SDK, VersionOrChannel = "9",
@@ -276,8 +271,8 @@ public class UninstallWorkflowTests
         var before = File.ReadAllText(environment.ManifestPath);
 
         Action uninstall = () => UninstallWorkflow.Execute(
-            environment.ManifestPath, environment.InstallPath, "8", InstallComponent.SDK,
-            interactive: true, confirm: () => ConfirmResult.No);
+            environment.ManifestPath, environment.InstallPath, "8.0.100", InstallComponent.SDK,
+            interactive: true, chooseAction: () => UninstallAction.Cancel);
 
         uninstall.Should().Throw<DotnetInstallException>();
         File.ReadAllText(environment.ManifestPath).Should().Be(before);
@@ -299,13 +294,13 @@ public class UninstallWorkflowTests
         var prompts = 0;
 
         Action uninstall = () => UninstallWorkflow.Execute(
-            environment.ManifestPath, environment.InstallPath, "8", InstallComponent.SDK,
-            interactive: true, confirm: () =>
+            environment.ManifestPath, environment.InstallPath, "8.0.100", InstallComponent.SDK,
+            interactive: true, chooseAction: () =>
             {
                 prompts++;
                 File.ReadAllText(environment.ManifestPath).Should().Be(before);
                 manifest.GetInstallations(root).Should().HaveCount(2);
-                return accept ? ConfirmResult.Yes : ConfirmResult.No;
+                return accept ? UninstallAction.RemoveSpecs : UninstallAction.Cancel;
             });
 
         if (accept)
@@ -335,14 +330,14 @@ public class UninstallWorkflowTests
         AddSpec(manifest, root, InstallComponent.SDK, "8");
 
         UninstallWorkflow.Execute(environment.ManifestPath, environment.InstallPath, "8",
-            InstallComponent.SDK, interactive: false, confirm: () => throw new AssertFailedException("Unexpected prompt."));
+            InstallComponent.SDK, interactive: false, chooseAction: () => throw new AssertFailedException("Unexpected prompt."));
 
         manifest.GetInstallations(root).Should().BeEmpty();
         Directory.GetDirectories(Path.Combine(environment.InstallPath, "sdk")).Should().BeEmpty();
     }
 
     [TestMethod]
-    public void Execute_BothWarnings_RequiresOnlyOneConfirmation()
+    public void Execute_SpecFirstWithRetainedTargetAndOtherRemovals_DoesNotPrompt()
     {
         using var environment = new TestEnvironment();
         using var mutex = new ScopedMutex(Constants.MutexNames.ModifyInstallationStates);
@@ -355,9 +350,9 @@ public class UninstallWorkflowTests
         var prompts = 0;
 
         UninstallWorkflow.Execute(environment.ManifestPath, environment.InstallPath, "8",
-            InstallComponent.SDK, interactive: true, confirm: () => { prompts++; return ConfirmResult.Yes; });
+            InstallComponent.SDK, interactive: true, chooseAction: () => { prompts++; return UninstallAction.RemoveSpecs; });
 
-        prompts.Should().Be(1);
+        prompts.Should().Be(0);
         manifest.GetInstallations(root).Should().ContainSingle().Which.Version.Should().Be("8.0.100");
     }
 
@@ -372,7 +367,7 @@ public class UninstallWorkflowTests
         AddSpec(manifest, root, InstallComponent.SDK, "8");
 
         UninstallWorkflow.Execute(environment.ManifestPath, environment.InstallPath, "8",
-            InstallComponent.SDK, interactive: true, confirm: () => throw new AssertFailedException("Unexpected prompt."));
+            InstallComponent.SDK, interactive: true, chooseAction: () => throw new AssertFailedException("Unexpected prompt."));
 
         manifest.GetInstallations(root).Should().BeEmpty();
     }

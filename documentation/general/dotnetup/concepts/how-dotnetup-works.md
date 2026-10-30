@@ -60,8 +60,10 @@ For more information about supported channels and versions, see
 
 Requirements can come from:
 
-- A channel or version that you supply on the command line.
-- An SDK requirement that `dotnetup` derives from a `global.json` file.
+- Command (`Explicit` in the manifest): You supplied the channel or version on the command line.
+- Migration: The requirement came from migrating an existing installation.
+- Repository file path (`GlobalJson` in the manifest): `dotnetup` derived the SDK
+  requirement from that `global.json` file.
 
 An exact version is pinned, so update commands don't advance it. A channel can
 resolve to a newer version during an update.
@@ -74,6 +76,12 @@ also share host, runtime, and targeting-pack files.
 Uninstall commands first remove matching tracked requirements. Cleanup then
 keeps the installed versions needed by the remaining requirements and removes
 only files that no remaining requirement needs.
+
+If no standalone specification matches, uninstall can instead target a full
+installed version. Choose whether to remove its specifications or keep them.
+Keeping specifications removes only the named installation record, then collects
+components unreferenced by any other installation record. Later install or update
+commands may reinstall the version. See [SDK uninstall](../reference/dotnetup-sdk-uninstall.md).
 
 ## Tracked and untracked installs
 
