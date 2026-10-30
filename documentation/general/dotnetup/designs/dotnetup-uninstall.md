@@ -49,13 +49,17 @@ The uninstall scenarios below use sdk installs in the examples, but should also 
 
 ## Scenarios
 
+Affected-spec lists use the same columns, labels, and sorting as `dotnetup list`,
+filtered to the specs relevant to the uninstall. They omit summary counts and
+unrelated installation-only rows.
+
 ### 1. I remove a spec that alone keeps an SDK installed
 
 I ran `dotnetup sdk install 10.0.103`. No other spec needs that SDK.
 
 ```console
 > dotnetup sdk uninstall 10.0.103
-Removed install spec: SDK 10.0.103 (command line).
+Removed install spec: .NET SDK 10.0.103 (Command).
 Uninstalled SDK 10.0.103.
 ```
 
@@ -70,7 +74,7 @@ that channel:
 
 ```console
 > dotnetup sdk uninstall 10.0.1xx
-Removed install spec: SDK 10.0.1xx (migration).
+Removed install spec: .NET SDK 10.0.1xx (Migration).
 Uninstalled SDK 10.0.103.
 ```
 
@@ -91,7 +95,9 @@ The command targets the installed SDK and asks before removing its install spec:
 > dotnetup sdk uninstall 10.0.103
 .NET SDK 10.0.103 is required by the following install spec:
 
-  .NET SDK 10.0.1xx
+Component  Installed version  Install spec  Source
+---------  -----------------  ------------  -------
+.NET SDK   10.0.103           10.0.1xx      Command
 
 To uninstall .NET SDK 10.0.103, this install spec must be removed.
 Would you like to remove this install spec? [y/N]
@@ -121,11 +127,11 @@ SDK could satisfy some of these specs.
 > dotnetup sdk uninstall 10.0.103
 .NET SDK 10.0.103 is required by the following install specs:
 
-  .NET SDK 10.0.1xx
-  .NET SDK 10.0.100 (rollForward: latestPatch, allowPrerelease: false)
-    From C:\src\app\global.json
-  .NET SDK 10.0.103 (rollForward: disable)
-    From C:\src\tools\global.json
+Component  Installed version  Install spec                                                 Source
+---------  -----------------  -----------------------------------------------------------  ------------------------
+.NET SDK   10.0.103           10.0.100 (rollForward: latestPatch, allowPrerelease: false)  C:\src\app\global.json
+.NET SDK   10.0.103           10.0.103 (rollForward: disable)                              C:\src\tools\global.json
+.NET SDK   10.0.103           10.0.1xx                                                     Command
 
 To uninstall .NET SDK 10.0.103, these install specs must be removed.
 This will stop tracking the listed global.json files, but will not change them.
@@ -168,9 +174,10 @@ eligible version is present; ask for confirmation before changing anything:
 > dotnetup sdk uninstall 10.0.105
 .NET SDK 10.0.105 is required by the following install specs:
 
-  .NET SDK 10.0.1xx
-  .NET SDK 10.0.100 (rollForward: latestPatch, allowPrerelease: false)
-    From C:\src\app\global.json
+Component  Installed version  Install spec                                                 Source
+---------  -----------------  -----------------------------------------------------------  ---------------------
+.NET SDK   10.0.105           10.0.100 (rollForward: latestPatch, allowPrerelease: false)  C:\src\app\global.json
+.NET SDK   10.0.105           10.0.1xx                                                     Command
 
 To uninstall .NET SDK 10.0.105, these install specs must be removed.
 This will stop tracking the listed global.json file, but will not change it.
@@ -206,11 +213,12 @@ result and show the remaining specs that currently resolve to that SDK:
 
 ```console
 > dotnetup sdk uninstall 10.0.1xx
-Removed install spec: SDK 10.0.1xx (command line).
+Removed install spec: .NET SDK 10.0.1xx (Command).
 .NET SDK 10.0.105 was kept because the following install spec still resolves to it:
 
-  .NET SDK 10.0.100 (rollForward: latestPatch, allowPrerelease: false)
-    From C:\src\app\global.json
+Component  Installed version  Install spec                                                 Source
+---------  -----------------  -----------------------------------------------------------  ---------------------
+.NET SDK   10.0.105           10.0.100 (rollForward: latestPatch, allowPrerelease: false)  C:\src\app\global.json
 
 No SDKs were uninstalled.
 ```
@@ -224,10 +232,12 @@ command-line spec and a channel also selects that SDK:
 
 ```console
 > dotnetup sdk uninstall 10.0.105
-Removed install spec: SDK 10.0.105 (command line).
+Removed install spec: .NET SDK 10.0.105 (Command).
 .NET SDK 10.0.105 was kept because the following install spec still resolves to it:
 
-  .NET SDK 10.0.1xx
+Component  Installed version  Install spec  Source
+---------  -----------------  ------------  -------
+.NET SDK   10.0.105           10.0.1xx      Command
 
 No SDKs were uninstalled.
 ```
@@ -305,7 +315,7 @@ If an exact-version spec exists but its SDK files are already missing,
 remove the matching spec without another confirmation. Report:
 
 ```text
-Removed install spec: SDK 10.0.103 (command line).
+Removed install spec: .NET SDK 10.0.103 (Command).
 SDK 10.0.103 was already missing; no SDK files were removed.
 ```
 
