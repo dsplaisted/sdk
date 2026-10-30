@@ -15,6 +15,7 @@ internal abstract class UninstallCommand : CommandBase
     private readonly string? _manifestPath;
     private readonly string? _installPath;
     private readonly bool _interactive;
+    private readonly UninstallAction _action;
 
     protected UninstallCommand(ParseResult parseResult, string commandName)
         : base(parseResult, commandName)
@@ -23,6 +24,9 @@ internal abstract class UninstallCommand : CommandBase
         _installPath = parseResult.GetValue(CommonOptions.InstallPathOption);
         _interactive = parseResult.GetValue(CommonOptions.InteractiveOption)
             && !parseResult.GetValue(CommonOptions.NonInteractiveOption);
+        _action = parseResult.GetValue(CommonOptions.KeepInstallSpecsOption) ? UninstallAction.KeepSpecs
+            : parseResult.GetValue(CommonOptions.RemoveInstallSpecsOption) ? UninstallAction.RemoveSpecs
+            : UninstallAction.Unspecified;
     }
 
     protected void ExecuteUninstall(string versionOrChannel, InstallComponent component)
@@ -32,6 +36,7 @@ internal abstract class UninstallCommand : CommandBase
             _installPath,
             versionOrChannel,
             component,
-            _interactive);
+            _interactive,
+            action: _action);
     }
 }

@@ -17,14 +17,15 @@ internal static class InstallationListRenderer
     /// <summary>
     /// Builds rows from specs and installations already filtered to one installation root and architecture.
     /// </summary>
-    internal static List<InstallationListRow> CreateRowsForRoot(IEnumerable<InstallSpecInfo> specs, List<InstallationInfo> installations)
+    internal static List<InstallationListRow> CreateRowsForRoot(IEnumerable<InstallSpecInfo> specs, List<InstallationInfo> installations,
+        IReadOnlyDictionary<InstallSpecInfo, InstallSpecResolution>? requirements = null)
     {
         var versions = installations.Select(i => i.Version).Distinct(StringComparer.Ordinal)
             .ToDictionary(v => v, v => ReleaseVersion.TryParse(v, out var version) ? version : null, StringComparer.Ordinal);
         var rows = new List<InstallationListRow>();
         foreach (var spec in specs)
         {
-            var resolution = InstallSpecResolver.Evaluate(new InstallSpec
+            var resolution = requirements is not null ? requirements[spec] : InstallSpecResolver.Evaluate(new InstallSpec
             {
                 Component = spec.Component,
                 VersionOrChannel = spec.VersionOrChannel,
@@ -164,7 +165,7 @@ internal static class InstallationListRenderer
     private static string FormatCount(int count, string singular, string plural) =>
         count == 1 ? singular : string.Format(CultureInfo.InvariantCulture, plural, count);
 
-    private static Table CreateTable(List<InstallationListRow> rows)
+    internal static Table CreateTable(List<InstallationListRow> rows)
     {
         var table = new Table().Border(TableBorder.Simple);
         table.AddColumn(new TableColumn(new Text(Strings.ListComponentColumn)));
@@ -195,7 +196,7 @@ internal static class InstallationListRenderer
         _ => 4
     };
 
-    private static string ComponentName(InstallComponent component) => component switch
+    internal static string ComponentName(InstallComponent component) => component switch
     {
         InstallComponent.SDK => ".NET SDK",
         InstallComponent.Runtime => Strings.ListRuntimeComponent,

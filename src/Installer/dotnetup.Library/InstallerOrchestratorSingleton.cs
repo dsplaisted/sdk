@@ -311,6 +311,10 @@ internal class InstallerOrchestratorSingleton
                 return new InstallResult(prepared.Install, WasAlreadyInstalled: true);
             }
 
+            if (manifest is not null)
+            {
+                prepared.Extractor.SubcomponentsToRepair.UnionWith(manifest.GetIncompleteSubcomponents(prepared.Request.InstallRoot));
+            }
             prepared.Extractor.Commit();
 
             ArchiveInstallationValidator validator = new();

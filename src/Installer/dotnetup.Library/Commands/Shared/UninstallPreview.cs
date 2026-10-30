@@ -2,118 +2,131 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Microsoft.Deployment.DotNet.Releases;
-using Microsoft.Dotnet.Installation;
-using Microsoft.Dotnet.Installation.Internal;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.List;
 using Spectre.Console;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Shared;
 
-/// <summary>
-/// Explains retained targets and unexpected GC removals from the prepared uninstall snapshot.
-/// Does not resolve specs again or modify installation state.
-/// </summary>
+/// <summary>Renders affected requirements and the cancel-by-default physical removal choice.</summary>
 internal static class UninstallPreview
 {
-    internal static bool Display(
-        GarbageCollectionPlan plan, List<Installation> targets,
-        InstallComponent requestedComponent, string versionOrChannel, IReadOnlyList<InstallSpec> specsToRemove)
+    internal static void DisplayRequiredBy(DotnetRootEntry root, Installation target, List<InstallSpec> specs,
+        IReadOnlyDictionary<InstallSpec, InstallSpecResolution>? requirements = null)
     {
-        var hasWarnings = false;
-        var hasRepositoryRequirements = false;
-        foreach (var target in targets.DistinctBy(i => (i.Component, i.Version)))
+        specs = specs.DistinctBy(s => (s.Component, s.VersionOrChannel, s.InstallSource, s.GlobalJsonPath)).ToList();
+        AnsiConsole.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            specs.Count == 1 ? Strings.UninstallRequiredByOne : Strings.UninstallRequiredByMany,
+            InstallationListRenderer.ComponentName(target.Component), target.Version));
+        DisplaySpecs(root, specs, requirements);
+        AnsiConsole.WriteLine(target.Component == InstallComponent.SDK
+            ? specs.Count == 1 ? Strings.UninstallReinstallWarningOne : Strings.UninstallReinstallWarningMany
+            : specs.Count == 1 ? Strings.UninstallRuntimeReinstallWarningOne : Strings.UninstallRuntimeReinstallWarningMany);
+        var repositories = specs.Count(s => s.InstallSource == InstallSource.GlobalJson);
+        if (repositories > 0)
         {
-            var specs = plan.GetReferencingSpecs(target);
-            if (specs.Count == 0)
-            {
-                continue;
-            }
-
-            hasWarnings = true;
-            AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture, Strings.UninstallRetainedInstallation,
-                DotnetupTheme.Accent($"{target.Component.GetDisplayName()} {target.Version}".EscapeMarkup())));
-            foreach (var spec in specs)
-            {
-                var source = spec.GlobalJsonPath ?? spec.InstallSource.ToString();
-                AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture,
-                    "  {0} {1} {2}", spec.Component.GetDisplayName().EscapeMarkup(), spec.VersionOrChannel.EscapeMarkup(),
-                    DotnetupTheme.Dim(string.Format(CultureInfo.InvariantCulture, Strings.InstallSpecSource, source.EscapeMarkup()))));
-            }
-            hasRepositoryRequirements |= specs.Any(s => s.InstallSource == InstallSource.GlobalJson);
-        }
-        if (hasRepositoryRequirements)
-        {
-            AnsiConsole.MarkupLine(DotnetupTheme.Dim(Strings.UninstallRepositoryRequirement.EscapeMarkup()));
-        }
-
-        var deletedPaths = plan.PathsToDelete.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var unexpected = plan.InstallationsToRemove.Except(targets)
-            .Where(i => plan.GetPrimaryPath(i) is { } path && deletedPaths.Contains(path))
-            .ToList();
-        AddUntrackedRemovals(plan, targets, unexpected);
-        var channel = new UpdateChannel(versionOrChannel);
-        var requestedPathPrefix = requestedComponent == InstallComponent.SDK
-            ? "sdk/"
-            : $"shared/{requestedComponent.GetFrameworkName()}/";
-        var removesRequestedFiles = plan.PathsToDelete.Any(path =>
-            path.StartsWith(requestedPathPrefix, StringComparison.OrdinalIgnoreCase) &&
-            ReleaseVersion.TryParse(path[requestedPathPrefix.Length..], out var version) && channel.Matches(version));
-        var removalMessage = removesRequestedFiles
-            ? Strings.UninstallUnexpectedAdditionalRemoval
-            : Strings.UninstallUnexpectedRemoval;
-        foreach (var installation in unexpected.DistinctBy(i => (i.Component, i.Version))
-            .Where(i => !MatchesRequest(i, requestedComponent, channel)))
-        {
-            hasWarnings = true;
-            AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture, removalMessage,
-                DotnetupTheme.Accent($"{installation.Component.GetDisplayName()} {installation.Version}".EscapeMarkup())));
-        }
-
-        if (hasWarnings)
-        {
-            DisplayRemovalSummary(specsToRemove);
-        }
-
-        return hasWarnings;
-    }
-
-    private static bool MatchesRequest(Installation installation, InstallComponent component, UpdateChannel channel) =>
-        installation.Component == component &&
-        ReleaseVersion.TryParse(installation.Version, out var version) && channel.Matches(version);
-
-    private static void DisplayRemovalSummary(IReadOnlyList<InstallSpec> specsToRemove)
-    {
-        AnsiConsole.WriteLine();
-        foreach (var spec in specsToRemove.DistinctBy(s => (s.Component, s.VersionOrChannel, s.InstallSource, s.GlobalJsonPath)))
-        {
-            var source = spec.GlobalJsonPath ?? spec.InstallSource.ToString();
-            AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture, Strings.UninstallRemovalSummary,
-                DotnetupTheme.Accent(spec.VersionOrChannel.EscapeMarkup()), spec.Component.GetDisplayName().EscapeMarkup(),
-                source.EscapeMarkup()));
+            AnsiConsole.WriteLine(specs.Count == 1 ? Strings.UninstallSingleRepositorySpecWarning
+                : repositories == 1 ? Strings.UninstallRepositoryWarningOne : Strings.UninstallRepositoryWarningMany);
         }
     }
 
-    private static void AddUntrackedRemovals(
-        GarbageCollectionPlan plan, List<Installation> targets, List<Installation> unexpected)
+    internal static void DisplayRetained(DotnetRootEntry root, Installation target, List<InstallSpec> specs,
+        IReadOnlyDictionary<InstallSpec, InstallSpecResolution>? requirements = null)
     {
-        var knownPaths = plan.InstallationsToRemove.SelectMany(i => i.Subcomponents)
-            .Concat(targets.SelectMany(i => i.Subcomponents))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in plan.PathsToDelete.Where(p => !knownPaths.Contains(p)))
+        specs = specs.DistinctBy(s => (s.Component, s.VersionOrChannel, s.InstallSource, s.GlobalJsonPath)).ToList();
+        AnsiConsole.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            specs.Count == 1 ? Strings.UninstallRetainedByOne : Strings.UninstallRetainedByMany,
+            InstallationListRenderer.ComponentName(target.Component), target.Version));
+        DisplaySpecs(root, specs, requirements);
+    }
+
+    private static void DisplaySpecs(DotnetRootEntry root, List<InstallSpec> specs,
+        IReadOnlyDictionary<InstallSpec, InstallSpecResolution>? requirements)
+    {
+        var pairs = specs.Select(s => (Spec: s, Info: new InstallSpecInfo
         {
-            var parts = path.Split('/');
-            InstallComponent? component = parts switch
+            Component = s.Component, VersionOrChannel = s.VersionOrChannel, Source = s.InstallSource,
+            GlobalJsonPath = s.GlobalJsonPath, MinimumVersion = s.MinimumVersion,
+            AllowPrerelease = s.AllowPrerelease, InstallRoot = root.Path, Architecture = root.Architecture
+        })).ToList();
+        var evaluations = requirements is null ? null : pairs.ToDictionary(pair => pair.Info, pair => requirements[pair.Spec]);
+        var installations = root.Installations.Where(i => i.RemovalPending ||
+            Directory.Exists(DotnetupSharedManifest.GetComponentDirectory(root.Path, i)))
+            .Select(i => new InstallationInfo
             {
-                ["sdk", _] => InstallComponent.SDK,
-                ["shared", InstallComponentExtensions.RuntimeFrameworkName, _] => InstallComponent.Runtime,
-                ["shared", InstallComponentExtensions.AspNetCoreFrameworkName, _] => InstallComponent.ASPNETCore,
-                ["shared", InstallComponentExtensions.WindowsDesktopFrameworkName, _] => InstallComponent.WindowsDesktop,
-                _ => null,
-            };
-            if (component is not null && !unexpected.Any(i => i.Component == component && i.Version == parts[^1]))
+                Component = i.Component, Version = i.Version, InstallRoot = root.Path, Architecture = root.Architecture,
+                IsValid = i.RemovalPending ? false : null
+            }).ToList();
+        var rows = InstallationListRenderer.CreateRowsForRoot(pairs.Select(pair => pair.Info), installations, evaluations)
+            .Where(r => r.Spec is not null)
+            .DistinctBy(r => (r.Component, r.SpecDisplay, r.SourceDisplay)).ToList();
+        AnsiConsole.Write(InstallationListRenderer.CreateTable(rows));
+    }
+
+    internal static UninstallAction ChooseAction(Installation target, int specCount)
+    {
+        var choices = new[]
+        {
+            string.Format(CultureInfo.InvariantCulture,
+                specCount == 1 ? Strings.UninstallRemoveChoiceOne : Strings.UninstallRemoveChoiceMany,
+                InstallationListRenderer.ComponentName(target.Component), target.Version),
+            string.Format(CultureInfo.InvariantCulture, Strings.UninstallKeepChoice,
+                InstallationListRenderer.ComponentName(target.Component), target.Version),
+            Strings.UninstallCancelChoice
+        };
+        AnsiConsole.WriteLine(Strings.UninstallChooseAction);
+        var selected = 2;
+        if (Console.IsInputRedirected)
+        {
+            for (var index = 0; index < choices.Length; index++)
             {
-                unexpected.Add(new Installation { Component = component.Value, Version = parts[^1] });
+                AnsiConsole.WriteLine($"{(index == selected ? ">" : " ")} {index + 1}. {choices[index]}");
+            }
+            while (true)
+            {
+                var input = Console.ReadLine()?.Trim();
+                if (input is null or "" or "3" or "\u001b")
+                {
+                    break;
+                }
+                if (input is "1" or "2")
+                {
+                    selected = input == "1" ? 0 : 1;
+                    break;
+                }
+                AnsiConsole.WriteLine(Strings.UninstallChooseNumber);
             }
         }
+        else
+        {
+            Rows Render() => new(choices.Select((choice, index) =>
+                new Text($"{(index == selected ? ">" : " ")} {choice}")));
+            AnsiConsole.Live(Render()).AutoClear(true).Start(context =>
+            {
+                while (true)
+                {
+                    var key = Console.ReadKey(intercept: true).Key;
+                    if (key == ConsoleKey.Escape)
+                    {
+                        selected = 2;
+                        break;
+                    }
+                    if (key == ConsoleKey.Enter)
+                    {
+                        break;
+                    }
+                    if (key == ConsoleKey.UpArrow)
+                    {
+                        selected = (selected + 2) % 3;
+                    }
+                    else if (key == ConsoleKey.DownArrow)
+                    {
+                        selected = (selected + 1) % 3;
+                    }
+                    context.UpdateTarget(Render());
+                }
+            });
+        }
+        AnsiConsole.WriteLine(choices[selected]);
+        return selected switch { 0 => UninstallAction.RemoveSpecs, 1 => UninstallAction.KeepSpecs, _ => UninstallAction.Cancel };
     }
 }

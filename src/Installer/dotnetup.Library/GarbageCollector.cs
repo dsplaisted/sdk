@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Microsoft.Dotnet.Installation;
 using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper.Telemetry;
 
@@ -14,10 +15,12 @@ namespace Microsoft.DotNet.Tools.Bootstrapper;
 internal class GarbageCollector
 {
     private readonly DotnetupSharedManifest _manifest;
+    private readonly Action<string> _deleteDirectory;
 
-    public GarbageCollector(DotnetupSharedManifest manifest)
+    public GarbageCollector(DotnetupSharedManifest manifest, Action<string>? deleteDirectory = null)
     {
         _manifest = manifest;
+        _deleteDirectory = deleteDirectory ?? (path => Directory.Delete(path, recursive: true));
     }
 
     /// <summary>
@@ -32,7 +35,8 @@ internal class GarbageCollector
     /// <summary>
     /// Plans installation-record and directory removals, updating only the in-memory manifest.
     /// </summary>
-    internal static GarbageCollectionPlan CreatePlan(DotnetInstallRoot installRoot, DotnetupManifestData manifest)
+    internal static GarbageCollectionPlan CreatePlan(DotnetInstallRoot installRoot, DotnetupManifestData manifest,
+        IReadOnlyDictionary<InstallSpec, InstallSpecResolution>? requirements = null)
     {
         var root = manifest.DotnetRoots.FirstOrDefault(r =>
             DotnetupUtilities.PathsEqual(Path.GetFullPath(r.Path), Path.GetFullPath(installRoot.Path)) &&
@@ -43,7 +47,7 @@ internal class GarbageCollector
             return new GarbageCollectionPlan(manifest, null, [], [], []);
         }
 
-        var installSpecsByInstallation = ResolveInstallSpecsByInstallation(root, out bool skipCollection);
+        var installSpecsByInstallation = ResolveInstallSpecsByInstallation(root, out bool skipCollection, requirements);
         if (skipCollection)
         {
             Console.Error.WriteLine(string.Format(CultureInfo.InvariantCulture,
@@ -56,6 +60,16 @@ internal class GarbageCollector
             .Where(i => !installationsToKeep.Contains((i.Component, i.Version)))
             .ToList();
 
+        return CreateComponentPlan(installRoot, manifest, installationsToRemove, installSpecsByInstallation);
+    }
+
+    internal static GarbageCollectionPlan CreateComponentPlan(
+        DotnetInstallRoot installRoot, DotnetupManifestData manifest,
+        IReadOnlyCollection<Installation> installationsToRemove,
+        Dictionary<Installation, List<InstallSpec>>? installSpecsByInstallation = null)
+    {
+        var root = manifest.DotnetRoots.First(r =>
+            DotnetupUtilities.PathsEqual(r.Path, installRoot.Path) && r.Architecture == installRoot.Architecture);
         var referencedSubcomponents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var installation in root.Installations.Except(installationsToRemove))
         {
@@ -65,13 +79,13 @@ internal class GarbageCollector
             }
         }
 
-        return new GarbageCollectionPlan(manifest, root, installSpecsByInstallation, installationsToRemove,
+        return new GarbageCollectionPlan(manifest, root, installSpecsByInstallation ?? [], [.. installationsToRemove],
             FindOrphanedSubcomponents(installRoot.Path, referencedSubcomponents));
     }
 
     /// <summary>
-    /// Removes planned installation records, persists the manifest, and deletes planned directories.
-    /// Does not resolve install specs or rescan the disk.
+    /// Preserves a recovery checkpoint before deleting directories, then commits the planned
+    /// spec and installation removals only after deletion succeeds.
     /// </summary>
     internal List<string> Apply(GarbageCollectionPlan plan)
     {
@@ -80,23 +94,43 @@ internal class GarbageCollector
             return [];
         }
 
+        if (plan.PathsToDelete.Count > 0)
+        {
+            var recovery = _manifest.ReadManifestWithoutPruning();
+            var root = recovery.DotnetRoots.FirstOrDefault(r =>
+                DotnetupUtilities.PathsEqual(r.Path, plan.Root.Path) && r.Architecture == plan.Root.Architecture);
+            if (root is not null)
+            {
+                var paths = plan.PathsToDelete.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var installation in root.Installations.Where(i =>
+                    i.Subcomponents.Any(paths.Contains) || plan.InstallationsToRemove.Any(removed =>
+                        removed.Component == i.Component && removed.Version == i.Version)))
+                {
+                    installation.RemovalPending = true;
+                }
+            }
+            _manifest.WriteManifest(recovery);
+        }
+
+        var deleted = DeleteOrphanedSubcomponents(plan.Root.Path, plan.PathsToDelete);
         foreach (var installation in plan.InstallationsToRemove)
         {
             plan.Root.Installations.Remove(installation);
         }
 
-        // Persist before deletion so a crash leaves orphaned directories for the next GC.
         _manifest.WriteManifest(plan.Manifest);
-        return DeleteOrphanedSubcomponents(plan.Root.Path, plan.PathsToDelete);
+        return deleted;
     }
 
-    private static Dictionary<Installation, List<InstallSpec>> ResolveInstallSpecsByInstallation(DotnetRootEntry root, out bool skipCollection)
+    private static Dictionary<Installation, List<InstallSpec>> ResolveInstallSpecsByInstallation(
+        DotnetRootEntry root, out bool skipCollection,
+        IReadOnlyDictionary<InstallSpec, InstallSpecResolution>? requirements)
     {
         skipCollection = false;
         var installSpecsByInstallation = new Dictionary<Installation, List<InstallSpec>>();
         foreach (var spec in root.InstallSpecs.ToList())
         {
-            var resolution = InstallSpecResolver.Resolve(spec, root.Installations);
+            var resolution = requirements is not null ? requirements[spec] : InstallSpecResolver.Resolve(spec, root.Installations);
             if (!resolution.IsActive)
             {
                 root.InstallSpecs.Remove(spec);
@@ -176,7 +210,7 @@ internal class GarbageCollector
         return paths;
     }
 
-    private static List<string> DeleteOrphanedSubcomponents(string dotnetRootPath, IReadOnlyList<string> paths)
+    private List<string> DeleteOrphanedSubcomponents(string dotnetRootPath, IReadOnlyList<string> paths)
     {
         using var op = Metrics.Track("gc/delete-orphaned-subcomponents", activityName: "gc.delete-orphaned-subcomponents");
         var deleted = new List<string>();
@@ -187,10 +221,14 @@ internal class GarbageCollector
         {
             try
             {
-                Directory.Delete(Path.Combine(dotnetRootPath, relativePath), recursive: true);
+                _deleteDirectory(Path.Combine(dotnetRootPath, relativePath));
                 deleted.Add(relativePath);
             }
-            catch (Exception ex)
+            catch (DirectoryNotFoundException)
+            {
+                // A previously interrupted removal may already have deleted this directory.
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 Console.Error.WriteLine($"Warning: Could not delete '{relativePath}': {ex.Message}");
                 ++failedCount;
@@ -202,6 +240,13 @@ internal class GarbageCollector
         op.Tag("gc.deleted_count", deleted.Count);
         op.Tag("gc.failed_count", failedCount);
         op.Tag("gc.failed_path", lastFailedPath);
+
+        if (failedCount > 0)
+        {
+            throw new DotnetInstallException(DotnetInstallErrorCode.UninstallFailed,
+                string.Format(CultureInfo.InvariantCulture, Strings.UninstallPartialFailure,
+                    string.Join(", ", deleted), failedCount, lastFailedPath));
+        }
 
         return deleted;
     }

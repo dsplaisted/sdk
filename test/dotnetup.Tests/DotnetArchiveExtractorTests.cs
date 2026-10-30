@@ -682,6 +682,47 @@ public class DotnetArchiveExtractorTests
         File.ReadAllText(runtimeFile).Should().Be("runtime-content");
     }
 
+    [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(false, true)]
+    [DataRow(true, false)]
+    [DataRow(true, true)]
+    public void Commit_RepairsOnlyIncompleteSubcomponents(bool zip, bool repair)
+    {
+        using var environment = new TestEnvironment();
+        var sdkDirectory = Path.Combine(environment.InstallPath, "sdk", "9.0.100");
+        var runtimeDirectory = Path.Combine(environment.InstallPath, "shared", "Microsoft.NETCore.App", "9.0.0");
+        Directory.CreateDirectory(sdkDirectory);
+        Directory.CreateDirectory(runtimeDirectory);
+        var runtimeFile = Path.Combine(runtimeDirectory, "System.Runtime.dll");
+        File.WriteAllText(runtimeFile, "healthy-shared-component");
+        (string path, string content)[] files =
+        [
+            ("sdk/9.0.100/dotnet.dll", "repaired-sdk"),
+            ("shared/Microsoft.NETCore.App/9.0.0/System.Runtime.dll", "do-not-overwrite")
+        ];
+        var downloader = new MockArchiveDownloader
+        {
+            CreateFakeArchive = true, FakeArchiveContent = zip ? CreateZipWithFiles(files) : CreateTarGzWithFiles(files),
+            ArchiveFileExtension = zip ? ".zip" : ".tar.gz"
+        };
+        var request = new DotnetInstallRequest(
+            new DotnetInstallRoot(environment.InstallPath, InstallerUtilities.GetDefaultInstallArchitecture()),
+            new UpdateChannel("9"), InstallComponent.SDK, new InstallRequestOptions());
+        using var extractor = new DotnetArchiveExtractor(request, new ReleaseVersion("9.0.100"),
+            new ReleaseManifest(), new NullProgressTarget(), downloader);
+        if (repair)
+        {
+            extractor.SubcomponentsToRepair.Add("sdk/9.0.100");
+        }
+        extractor.Prepare();
+        extractor.Commit();
+
+        File.Exists(Path.Combine(sdkDirectory, "dotnet.dll")).Should().Be(repair);
+        File.ReadAllText(runtimeFile).Should().Be("healthy-shared-component");
+        extractor.ExtractedSubcomponents.Should().BeEquivalentTo(["sdk/9.0.100", "shared/Microsoft.NETCore.App/9.0.0"]);
+    }
+
     /// <summary>
     /// Creates a tar.gz archive in memory with the specified file entries.
     /// </summary>

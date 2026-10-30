@@ -24,6 +24,7 @@ internal class DotnetArchiveExtractor : IDisposable
     /// Gets the list of subcomponent identifiers that were extracted during the last Commit() call.
     /// </summary>
     public IReadOnlyList<string> ExtractedSubcomponents => [.. _extractedSubcomponents];
+    internal HashSet<string> SubcomponentsToRepair { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public DotnetArchiveExtractor(
         DotnetInstallRequest request,
@@ -237,7 +238,7 @@ internal class DotnetArchiveExtractor : IDisposable
         // Build a predicate that skips entries whose subcomponent already exists on disk.
         // The archive is still downloaded and all subcomponents are tracked for the manifest,
         // but extraction is skipped to avoid overwriting files from an earlier installation.
-        var shouldSkipEntry = CreateExistingSubcomponentSkipPredicate(targetDir, _request.Options.Verbosity);
+        var shouldSkipEntry = CreateExistingSubcomponentSkipPredicate(targetDir, _request.Options.Verbosity, SubcomponentsToRepair);
 
         // Extract archive, redirecting muxer to temp path and skipping existing subcomponents
         if (archivePath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
@@ -267,7 +268,8 @@ internal class DotnetArchiveExtractor : IDisposable
     /// with an already-installed SDK). The entry is still reported to the
     /// <c>onEntryExtracted</c> callback so the subcomponent is recorded in the manifest.
     /// </summary>
-    private static Func<string, bool> CreateExistingSubcomponentSkipPredicate(string targetDir, Verbosity verbosity)
+    private static Func<string, bool> CreateExistingSubcomponentSkipPredicate(
+        string targetDir, Verbosity verbosity, HashSet<string> subcomponentsToRepair)
     {
         var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
 
@@ -282,7 +284,7 @@ internal class DotnetArchiveExtractor : IDisposable
             if (!cache.TryGetValue(subcomponentId, out bool exists))
             {
                 var subcomponentPath = Path.Combine(targetDir, subcomponentId.Replace('/', Path.DirectorySeparatorChar));
-                exists = Directory.Exists(subcomponentPath);
+                exists = !subcomponentsToRepair.Contains(subcomponentId) && Directory.Exists(subcomponentPath);
                 cache[subcomponentId] = exists;
 
                 if (exists && verbosity >= Verbosity.Detailed)

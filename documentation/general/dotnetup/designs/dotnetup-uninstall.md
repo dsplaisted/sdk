@@ -12,9 +12,11 @@ This proposal aims to improve this by improving the behavior of the uninstall co
 
 The relationship-based text list layout, full repository-policy resolution,
 last-known requirement fallback, and migration provenance are implemented.
-Matching-spec uninstall and removal of `--source` are also implemented.
-Targeting an installed version without a matching standalone spec and the
-associated choice to keep or remove its specs remain proposed.
+Matching-spec uninstall, physical-version uninstall with a cancel-by-default
+choice, the two noninteractive action options, and removal of `--source` are
+implemented. Physical-only removal collects components while preserving other
+installation records. Failed deletions preserve specs and mark affected
+installation records incomplete for retry or repair.
 
 ## Proposed behavior
 
@@ -36,6 +38,11 @@ to the same installation.
   If no specs resolve to the installed version, remove only that SDK without
   an additional spec-removal decision.
 - If neither matches, report an error.
+
+The proposed `--remove-install-specs` and `--keep-install-specs` options select the
+corresponding action without prompting. They preserve spec-first matching rather
+than forcing the argument to name a physical installation; see
+[Scripts and cancellation](#scripts-and-cancellation).
 
 Garbage collection has two levels: collecting installation records no remaining
 spec selects, then collecting component directories no remaining installation
@@ -416,18 +423,50 @@ not assumed by the examples above.
 
 ## Scripts and cancellation
 
+Add two mutually exclusive options to SDK and runtime uninstall:
+
+| Proposed option | When no standalone spec matches and the argument names an installed version |
+| --- | --- |
+| `--remove-install-specs` | Remove the specs currently resolving to the named installation and uninstall it, then run normal installation and component collection. This is the first action in the interactive prompt. |
+| `--keep-install-specs` | Remove only the named installation record, leave all specs and other installation records unchanged, then collect unreferenced components. This is the "without modifying install specs" action. Later install or update commands may reinstall the version. |
+
+These are action choices, not a general `--yes` or `--force`. Either option skips
+the action-selection prompt in interactive and noninteractive use. Other errors
+and removal failures still return failure.
+
+For scenario 2, scripts can select either action explicitly:
+
+```console
+dotnetup sdk uninstall 10.0.103 --remove-install-specs
+dotnetup sdk uninstall 10.0.103 --keep-install-specs
+```
+
+These are alternatives, not a sequence to run. The same choices apply when the
+affected specs include repository registrations, as in scenarios 3 and 4.
+
 Spec-first removal behaves the same with or without an interactive terminal:
 remove the matching spec, then report any retained SDK and the specs selecting
-it. Do not expand to other specs. Without an interactive terminal, a
-physical-version uninstall with affected specs instead fails without mutation,
-reports those specs, and explains that a choice is required. Do not silently
-choose SDK-only removal or spec removal. If no specs resolve to the physical
-version, removing it requires no such choice.
+it. Do not expand to other specs. The options do not override that behavior:
 
-Automation needs a deliberate way to choose SDK-only removal or affected-spec
-removal for a physical-version uninstall. The options remain to be designed;
-they must not change matching-spec removal into a physical-version operation.
-No new switch is presented as available in this draft.
+- `--remove-install-specs` is redundant when a standalone spec matches. Remove
+  only the matching standalone specs, run normal garbage collection, and leave
+  other specs selecting the same installation unchanged.
+- `--keep-install-specs` is incompatible with a matching standalone spec, because
+  spec-first removal would delete that spec. Report the conflict and fail without
+  mutation. Do not silently ignore the option or switch to physical removal.
+- Passing both options is invalid and fails before mutation, regardless of the
+  target.
+
+Without either option, an interactive physical-version uninstall with affected
+specs shows the action-selection prompt, with Cancel selected by default. Without
+an interactive terminal, it instead fails without mutation, reports those specs,
+and explains how to select `--remove-install-specs` or `--keep-install-specs`.
+Do not silently choose an action. If no specs resolve to the physical version,
+removing it requires no such choice.
+
+Neither option turns an unregistered channel into a physical-version target or
+makes a missing target succeed. The not-found rules in scenarios 6 and 8 still
+apply.
 
 In an interactive plan, Cancel changes nothing. File changes while the prompt
 is open require revalidation before applying it. Automatic reconciliation of

@@ -96,7 +96,12 @@ internal static class InstallationLister
             bool? isValid = null;
             string? validationFailure = null;
 
-            if (verify)
+            if (installation.RemovalPending)
+            {
+                isValid = false;
+                validationFailure = Strings.UninstallIncompleteInstallation;
+            }
+            else if (verify)
             {
                 var dotnetInstall = new DotnetInstall(
                     installRoot,

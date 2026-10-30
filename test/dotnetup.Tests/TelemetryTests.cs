@@ -569,6 +569,7 @@ public class DotnetupTelemetryTests : IDisposable
     [TestMethod]
     [DataRow(DotnetInstallErrorCode.AdminPathBlocked, "user")]
     [DataRow(DotnetInstallErrorCode.InstallPathHasUntrackedArtifacts, "user")]
+    [DataRow(DotnetInstallErrorCode.UninstallFailed, "user")]
     [DataRow(DotnetInstallErrorCode.ProcessStartFailed, "product")]
     [DataRow(DotnetInstallErrorCode.ReleaseLookupFailed, "product")]
     public void RecordException_ClassifiesByErrorCode(DotnetInstallErrorCode errorCode, string expectedCategory)

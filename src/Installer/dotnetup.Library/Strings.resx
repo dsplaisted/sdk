@@ -633,47 +633,12 @@ Or open a new terminal.</value>
   <data name="ScrollContinue" xml:space="preserve">
     <value>(Press Enter to continue)</value>
   </data>
-  <data name="UninstallRetainedInstallation" xml:space="preserve">
-    <value>{0} will [bold]not[/] be uninstalled because it has other install specs that require it:</value>
-    <comment>{0} is a highlighted component name and installed version. {Locked="[bold]"}{Locked="[/]"}</comment>
-  </data>
-  <data name="UninstallUnexpectedRemoval" xml:space="preserve">
-    <value>{0} will be [bold]uninstalled[/] because it is no longer referenced by any install specs.</value>
-    <comment>{0} is a highlighted component name and installed version. {Locked="[bold]"}{Locked="[/]"}</comment>
-  </data>
-  <data name="UninstallUnexpectedAdditionalRemoval" xml:space="preserve">
-    <value>{0} will [bold]also[/] be [bold]uninstalled[/] because it is no longer referenced by any install specs.</value>
-    <comment>{0} is a highlighted component name and installed version. Used only when the operation also removes files for the requested component and channel. {Locked="[bold]"}{Locked="[/]"}</comment>
-  </data>
-  <data name="InstallSpecSource" xml:space="preserve">
-    <value>(source: {0})</value>
-    <comment>{0} is an install-source identifier or a global.json path.</comment>
-  </data>
-  <data name="UninstallRemovalSummary" xml:space="preserve">
-    <value>Install spec '{0}' ({1}; source: {2}) will be removed from tracking.</value>
-    <comment>{0} is a highlighted version or channel; {1} is a component name; {2} is an install-source identifier or a global.json path.</comment>
-  </data>
   <data name="UninstallNoTrackedInstallations" xml:space="preserve">
     <value>No tracked installations found at {0}.</value>
     <comment>{0} is the installation root path.</comment>
   </data>
-  <data name="UninstallNoMatchingInstallations" xml:space="preserve">
-    <value>No command-line or migration install spec found for {0} '{1}' at {2}.</value>
-    <comment>{0} is a component name; {1} is a version or channel; {2} is the installation root path.</comment>
-  </data>
-  <data name="UninstallRepositoryRequirement" xml:space="preserve">
-    <value>To change or remove a repository SDK requirement, update or delete its global.json file:</value>
-    <comment>{Locked="global.json"}</comment>
-  </data>
-  <data name="UninstallConfirmationPrompt" xml:space="preserve">
-    <value>Proceed with uninstall?</value>
-  </data>
   <data name="UninstallCancelled" xml:space="preserve">
     <value>Uninstall cancelled. No install specs or files were removed.</value>
-  </data>
-  <data name="UninstallDereferencedSpec" xml:space="preserve">
-    <value>Dereferenced {0} {1} {2}</value>
-    <comment>{0} is a component name; {1} is a highlighted version or channel; {2} is the formatted install-source description.</comment>
   </data>
   <data name="CommandDone" xml:space="preserve">
     <value>Done.</value>
@@ -687,5 +652,147 @@ Or open a new terminal.</value>
   </data>
   <data name="GarbageCollectionNoFilesRemoved" xml:space="preserve">
     <value>No files were removed.</value>
+  </data>
+  <data name="UninstallRemoveSpecsOption" xml:space="preserve">
+    <value>Uninstall the version and remove its install specs. A matching standalone spec is removed first.</value>
+  </data>
+  <data name="UninstallSdkDescription" xml:space="preserve">
+    <value>Removes an SDK install spec or an installed SDK version and cleans up unused components.</value>
+    <comment>{Locked="SDK"}</comment>
+  </data>
+  <data name="UninstallRuntimeDescription" xml:space="preserve">
+    <value>Removes a runtime install spec or an installed runtime version and cleans up unused components.</value>
+  </data>
+  <data name="UninstallKeepSpecsOption" xml:space="preserve">
+    <value>Uninstall only the version without modifying install specs. Not valid when a standalone spec matches.</value>
+  </data>
+  <data name="UninstallConflictingOptions" xml:space="preserve">
+    <value>--remove-install-specs and --keep-install-specs cannot be used together.</value>
+    <comment>{Locked="--remove-install-specs"}{Locked="--keep-install-specs"}</comment>
+  </data>
+  <data name="UninstallKeepMatchingSpec" xml:space="preserve">
+    <value>The argument matches a standalone install spec. --keep-install-specs cannot be used because uninstall removes that spec first. Run dotnetup list to see install specs.</value>
+    <comment>{Locked="--keep-install-specs"}{Locked="dotnetup list"}</comment>
+  </data>
+  <data name="UninstallTargetNotFound" xml:space="preserve">
+    <value>No saved {0} install spec or installed version matches '{1}' at {2}. Run dotnetup list to see installed versions and their install specs. To remove an installed version, specify its full version.</value>
+    <comment>{0} is a component name; {1} is the argument; {2} is the install root. {Locked="dotnetup list"}</comment>
+  </data>
+  <data name="UninstallActionRequired" xml:space="preserve">
+    <value>Choose --remove-install-specs to remove the listed install specs, or --keep-install-specs to uninstall the version without modifying install specs. No changes were made.</value>
+    <comment>{Locked="--remove-install-specs"}{Locked="--keep-install-specs"}</comment>
+  </data>
+  <data name="UninstallUnreadableRequirements" xml:space="preserve">
+    <value>Some repository requirements could not be read and have no complete saved requirement. Install specs cannot safely be removed. Use --keep-install-specs to remove only the version, or repair the repository files and retry. No changes were made.</value>
+    <comment>{Locked="--keep-install-specs"}</comment>
+  </data>
+  <data name="UninstallPlanChanged" xml:space="preserve">
+    <value>Installations or repository requirements changed while choosing an uninstall action. No changes were made. Run the command again to review the current requirements.</value>
+  </data>
+  <data name="UninstallRequiredByOne" xml:space="preserve">
+    <value>{0} {1} is required by the following install spec:</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallRequiredByMany" xml:space="preserve">
+    <value>{0} {1} is required by the following install specs:</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallReinstallWarningOne" xml:space="preserve">
+    <value>If you keep the install spec, later install or update commands may reinstall this SDK.</value>
+    <comment>{Locked="SDK"}</comment>
+  </data>
+  <data name="UninstallReinstallWarningMany" xml:space="preserve">
+    <value>If you keep the install specs, later install or update commands may reinstall this SDK.</value>
+    <comment>{Locked="SDK"}</comment>
+  </data>
+  <data name="UninstallRuntimeReinstallWarningOne" xml:space="preserve">
+    <value>If you keep the install spec, later install or update commands may reinstall this runtime.</value>
+  </data>
+  <data name="UninstallRuntimeReinstallWarningMany" xml:space="preserve">
+    <value>If you keep the install specs, later install or update commands may reinstall this runtime.</value>
+  </data>
+  <data name="UninstallSingleRepositorySpecWarning" xml:space="preserve">
+    <value>Removing the install spec stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install spec, future updates will no longer install SDKs for it.
+To register the repository again, run dotnetup sdk install in that repository.</value>
+    <comment>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</comment>
+  </data>
+  <data name="UninstallRepositoryWarningOne" xml:space="preserve">
+    <value>Removing the install specs stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register the repository again, run dotnetup sdk install in that repository.</value>
+    <comment>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</comment>
+  </data>
+  <data name="UninstallRepositoryWarningMany" xml:space="preserve">
+    <value>Removing the install specs stops tracking the listed global.json files, but does not change them.
+These repositories may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register a repository again, run dotnetup sdk install in that repository.</value>
+    <comment>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</comment>
+  </data>
+  <data name="UninstallChooseAction" xml:space="preserve">
+    <value>Choose an action:</value>
+  </data>
+  <data name="UninstallChooseNumber" xml:space="preserve">
+    <value>Enter 1, 2, or 3. Press Enter to cancel.</value>
+  </data>
+  <data name="UninstallRemoveChoiceOne" xml:space="preserve">
+    <value>Uninstall {0} {1} and remove the listed install spec</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallRemoveChoiceMany" xml:space="preserve">
+    <value>Uninstall {0} {1} and remove the listed install specs</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallKeepChoice" xml:space="preserve">
+    <value>Uninstall {0} {1} without modifying install specs</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallCancelChoice" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="UninstallRemovedSpec" xml:space="preserve">
+    <value>Removed install spec: {0} {1} ({2}).</value>
+    <comment>{0} is the component name; {1} is its channel or version; {2} is its source.</comment>
+  </data>
+  <data name="UninstallRemovedVersion" xml:space="preserve">
+    <value>Uninstalled {0} {1}.</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallRemovedRecord" xml:space="preserve">
+    <value>Removed the {0} {1} installation record. Its files are still used by another installation.</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallRetainedByOne" xml:space="preserve">
+    <value>{0} {1} was kept because the following install spec still resolves to it:</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallRetainedByMany" xml:space="preserve">
+    <value>{0} {1} was kept because the following install specs still resolve to it:</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallKeptSpecs" xml:space="preserve">
+    <value>Install specs were kept. A later install or update may install this version again.</value>
+  </data>
+  <data name="UninstallAlreadyMissing" xml:space="preserve">
+    <value>{0} {1} was already missing; no files for that version were removed.</value>
+    <comment>{0} is the component name; {1} is its version.</comment>
+  </data>
+  <data name="UninstallNoVersionsRemoved" xml:space="preserve">
+    <value>No {0} versions were uninstalled.</value>
+    <comment>{0} is the component name.</comment>
+  </data>
+  <data name="UninstallNoSdkRemains" xml:space="preserve">
+    <value>No SDKs remain in the managed installation.</value>
+    <comment>{Locked="SDKs"}</comment>
+  </data>
+  <data name="UninstallPartialFailure" xml:space="preserve">
+    <value>Removal was incomplete. Removed directories: {0}. Failed to remove {1} directories; last failure: {2}. Remaining paths were reported above. Install specs and incomplete installation records were preserved for retry or repair.</value>
+    <comment>{0} lists successfully removed directories; {1} is the failure count; {2} is the last failed relative path.</comment>
+  </data>
+  <data name="UninstallIncompleteInstallation" xml:space="preserve">
+    <value>A previous removal was interrupted or failed. Retry uninstall or install this version again to repair it.</value>
   </data>
 </root>

@@ -166,6 +166,9 @@ public enum DotnetInstallErrorCode
 
     /// <summary>The user declined confirmation of an operation.</summary>
     OperationCancelled,
+
+    /// <summary>One or more installation components could not be removed.</summary>
+    UninstallFailed,
 }
 
 /// <summary>

@@ -5,14 +5,11 @@ using System.Text.RegularExpressions;
 using Microsoft.Dotnet.Installation;
 using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Dotnetup.Tests.Utilities;
-using BootstrapperStrings = Microsoft.DotNet.Tools.Bootstrapper.Strings;
+using Microsoft.NET.TestFramework;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests;
 
-/// <summary>
-/// Exercises the real CLI process against isolated manifests and fake disk installations.
-/// Covers parsing, warnings, redirected confirmation, GC, and externally edited manifest state.
-/// </summary>
+/// <summary>Exercises the real CLI against isolated manifests and fake disk installations.</summary>
 [TestClass]
 public class UninstallEndToEndTests : IDisposable
 {
@@ -22,418 +19,272 @@ public class UninstallEndToEndTests : IDisposable
     [DataRow("sdk")]
     [DataRow("runtime")]
     [DataRow("alias")]
-    public void UninstallHelp_ShowsNonInteractiveOptionDescription(string noun)
+    public void Help_ShowsBothActionsAndNonInteractiveOption(string noun)
     {
-        string[] command = noun == "alias" ? ["uninstall", "--help"] : [noun, "uninstall", "--help"];
-
+        var command = noun == "alias" ? new[] { "uninstall", "--help" } : [noun, "uninstall", "--help"];
         var output = Run(command, out var exitCode);
 
         exitCode.Should().Be(0, output);
-        output.Should().Contain("--non-interactive").And.Contain(BootstrapperStrings.CommandNonInteractiveOptionDescription);
+        output.Should().Contain("--remove-install-specs").And.Contain("--keep-install-specs").And.Contain("--non-interactive");
     }
 
     [TestMethod]
     [DataRow("sdk", "11.0", InstallComponent.SDK, "11.0.100")]
+    [DataRow("alias", "11.0", InstallComponent.SDK, "11.0.100")]
     [DataRow("runtime", "11.0", InstallComponent.Runtime, "11.0.0")]
     [DataRow("runtime", "runtime@11.0", InstallComponent.Runtime, "11.0.0")]
     [DataRow("runtime", "aspnetcore@11.0", InstallComponent.ASPNETCore, "11.0.0")]
     [DataRow("runtime", "windowsdesktop@11.0", InstallComponent.WindowsDesktop, "11.0.0")]
-    public void StraightforwardUninstall_DoesNotWarn(
-        string noun, string request, InstallComponent component, string version)
+    public void MatchingSpec_UninstallsWithoutPrompt(string noun, string argument, InstallComponent component, string version)
     {
         _fixture.AddInstallation(component, version);
         _fixture.AddSpecs(component, "11.0");
 
-        var output = Run([noun, "uninstall", request], out var exitCode, input: "");
+        var output = Run(Command(noun, argument), out var exitCode, "");
 
         exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        output.Should().NotContain("will be removed from tracking");
+        output.Should().NotContain("Choose an action:").And.NotContain("Proceed with uninstall?");
+        output.Should().Contain("Removed install spec:").And.Contain("Command");
         _fixture.ReadRoot().Installations.Should().BeEmpty();
         _fixture.ReadRoot().InstallSpecs.Should().BeEmpty();
         AssertFilesRemoved(component, version);
     }
 
     [TestMethod]
-    public void OtherTrackedMajors_DoNotWarnAndRemainInstalled()
+    public void MatchingSpec_CollectsOtherUnreferencedInstallationsWithoutPrompt()
     {
-        foreach (var major in new[] { 8, 9, 11 })
+        foreach (var version in new[] { "9.0.100", "11.0.100", "11.0.104" })
         {
-            _fixture.AddInstallation(InstallComponent.SDK, $"{major}.0.100");
-            _fixture.AddSpecs(InstallComponent.SDK, $"{major}.0");
+            _fixture.AddInstallation(InstallComponent.SDK, version);
         }
+        _fixture.AddInstallation(InstallComponent.Runtime, "11.0.0");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
 
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, input: "");
+        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, "");
 
         exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        _fixture.ReadRoot().Installations.Select(i => i.Version).Should().BeEquivalentTo(["8.0.100", "9.0.100"]);
-        _fixture.ReadRoot().InstallSpecs.Select(s => s.VersionOrChannel).Should().BeEquivalentTo(["8.0", "9.0"]);
-        AssertFilesRemoved(InstallComponent.SDK, "11.0.100");
+        output.Should().NotContain("Choose an action:").And.NotContain("Proceed with uninstall?");
+        _fixture.ReadRoot().Installations.Should().BeEmpty();
+        output.Should().Contain("No SDKs remain");
     }
 
     [TestMethod]
-    [DataRow("y\n", true)]
-    [DataRow("\n", true)]
-    [DataRow("n\n", false)]
-    [DataRow("\u001b\n", false)]
-    [DataRow("", false)]
-    [DataRow("invalid\nn\n", false)]
-    public void GarbageCollectionWarning_ConfirmsBeforeMutation(string input, bool accept)
+    [DataRow("sdk", InstallComponent.SDK, "11.0.100")]
+    [DataRow("runtime", InstallComponent.Runtime, "11.0.0")]
+    public void MatchingSpec_RemovesOnlyMatchingSpecsAndExplainsRetainedVersion(string noun, InstallComponent component, string version)
     {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
+        _fixture.AddInstallation(component, version);
+        _fixture.AddSpecs(component, "11.0", "11", version);
+
+        var output = Run(Command(noun, "11.0"), out var exitCode, "", "--remove-install-specs");
+
+        exitCode.Should().Be(0, output);
+        Compact(output).Should().Contain("was kept because the following install specs still resolve to it:");
+        output.Should().Contain("Component").And.Contain("Installed version").And.Contain("Install spec").And.Contain("Source");
+        output.Should().Contain("Command").And.NotContain("Explicit").And.NotContain("Choose an action:");
+        _fixture.ReadRoot().Installations.Should().ContainSingle();
+        _fixture.ReadRoot().InstallSpecs.Select(s => s.VersionOrChannel).Should().BeEquivalentTo(["11", version]);
+    }
+
+    [TestMethod]
+    [DataRow("1\n", true, false)]
+    [DataRow("2\n", true, true)]
+    [DataRow("\n", false, false)]
+    [DataRow("3\n", false, false)]
+    [DataRow("\u001b\n", false, false)]
+    [DataRow("", false, false)]
+    [DataRow("invalid\n\n", false, false)]
+    public void PhysicalVersion_RedirectedChoiceDefaultsToCancel(string input, bool success, bool keep)
+    {
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
         _fixture.AddSpecs(InstallComponent.SDK, "11.0");
         var before = File.ReadAllText(_fixture.Environment.ManifestPath);
 
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, input);
+        var output = Run(["sdk", "uninstall", "11.0.100"], out var exitCode, input);
 
-        exitCode.Should().Be(accept ? 0 : 1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 1, prompts: 1);
-        output.Should().Contain(".NET SDK 9.0.100 will also be uninstalled");
-        output.Should().Contain("(Y/n; Enter to proceed, Esc to cancel)");
-        output.Should().MatchRegex($@"Enter to proceed, Esc to cancel\)\s+{(accept ? "Yes" : "No")}\b");
-        output.Should().Contain("Install spec '11.0' (.NET SDK; source: Explicit) will be removed from tracking.");
-        output.Should().NotContain("retained versions");
-        output.IndexOf("will be removed from tracking", StringComparison.Ordinal)
-            .Should().BeLessThan(output.IndexOf("Proceed with uninstall?", StringComparison.Ordinal));
-        if (accept)
+        exitCode.Should().Be(success ? 0 : 1, output);
+        Compact(output).Should().Contain("Choose an action:").And.Contain("> 3. Cancel");
+        Compact(output).Should().Contain("Uninstall .NET SDK 11.0.100 and remove the listed install spec");
+        Compact(output).Should().Contain("Uninstall .NET SDK 11.0.100 without modifying install specs");
+        if (success)
         {
+            _fixture.ReadRoot().InstallSpecs.Should().HaveCount(keep ? 1 : 0);
             _fixture.ReadRoot().Installations.Should().BeEmpty();
-            AssertFilesRemoved(InstallComponent.SDK, "9.0.100");
             AssertFilesRemoved(InstallComponent.SDK, "11.0.100");
         }
         else
         {
+            output.Should().Contain("Uninstall cancelled").And.NotContain("Done.");
             File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-            _fixture.ReadRoot().Installations.Should().HaveCount(2);
-            output.Should().Contain("Uninstall cancelled");
-            output.Should().NotContain("Done.");
         }
     }
 
     [TestMethod]
-    [DataRow("sdk", InstallComponent.SDK, "11.0.100", "9.0.100")]
-    [DataRow("runtime", InstallComponent.Runtime, "11.0.0", "9.0.0")]
-    public void SdkAndRuntime_GarbageCollectionWarningsHaveSameConfirmationBehavior(
-        string noun, InstallComponent component, string target, string other)
+    [DataRow("sdk", "11.0.100", InstallComponent.SDK)]
+    [DataRow("alias", "11.0.100", InstallComponent.SDK)]
+    [DataRow("runtime", "11.0.0", InstallComponent.Runtime)]
+    [DataRow("runtime", "aspnetcore@11.0.0", InstallComponent.ASPNETCore)]
+    [DataRow("runtime", "windowsdesktop@11.0.0", InstallComponent.WindowsDesktop)]
+    public void PhysicalVersion_FlagsWorkNonInteractivelyForEveryCommand(string noun, string argument, InstallComponent component)
     {
-        _fixture.AddInstallation(component, target);
-        _fixture.AddInstallation(component, other);
+        var version = component == InstallComponent.SDK ? "11.0.100" : "11.0.0";
+        _fixture.AddInstallation(component, version);
         _fixture.AddSpecs(component, "11.0");
 
-        var output = Run([noun, "uninstall", "11.0"], out var exitCode);
+        var output = Run(Command(noun, argument), out var exitCode, "", "--non-interactive", "--keep-install-specs");
 
         exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 1, prompts: 1);
+        output.Should().NotContain("Choose an action:");
+        _fixture.ReadRoot().InstallSpecs.Should().ContainSingle();
         _fixture.ReadRoot().Installations.Should().BeEmpty();
+    }
+
+    [TestMethod]
+    [DataRow("--remove-install-specs")]
+    [DataRow("--keep-install-specs")]
+    public void PhysicalVersion_WithRepositoryAndOlderPin_UsesChosenAction(string option)
+    {
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.104");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "11.0.100");
+        var path = AddRepository();
+        var contents = File.ReadAllText(path);
+
+        var output = Run(["sdk", "uninstall", "11.0.104"], out var exitCode, "", "--non-interactive", option);
+
+        exitCode.Should().Be(0, output);
+        output.Should().NotContain("Choose an action:");
+        Compact(output).Should().Contain("listed global.json file, but does not change it.");
+        _fixture.ReadRoot().Installations.Should().ContainSingle().Which.Version.Should().Be("11.0.100");
+        _fixture.ReadRoot().InstallSpecs.Should().HaveCount(option == "--keep-install-specs" ? 3 : 1);
+        File.ReadAllText(path).Should().Be(contents);
+    }
+
+    [TestMethod]
+    public void NonInteractiveWithoutAction_FailsWithoutChangingStateAndExplainsFlags()
+    {
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
+        _fixture.AddSpecs(InstallComponent.SDK, "latest");
+        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
+
+        var output = Run(["sdk", "uninstall", "11.0.100"], out var exitCode, "", "--non-interactive");
+
+        exitCode.Should().Be(1, output);
+        output.Should().Contain("--remove-install-specs").And.Contain("--keep-install-specs").And.NotContain("Choose an action:");
+        File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
     }
 
     [TestMethod]
     [DataRow("sdk")]
     [DataRow("runtime")]
     [DataRow("alias")]
-    public void NonInteractive_OverridesInteractiveAndStillPrintsWarnings(string noun)
+    public void ConflictingFlags_AreRejectedBeforeMutation(string noun)
     {
-        var component = noun == "runtime" ? InstallComponent.Runtime : InstallComponent.SDK;
-        var version = noun == "runtime" ? "11.0.0" : "11.0.100";
-        _fixture.AddInstallation(component, version);
-        _fixture.AddSpecs(component, "11.0", "11");
-        string[] command = noun == "alias" ? ["uninstall", "11.0"] : [noun, "uninstall", "11.0"];
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
+        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
 
-        var output = Run(command, out var exitCode, input: "", "--non-interactive");
+        var output = Run(Command(noun, "11.0"), out var exitCode, "", "--remove-install-specs", "--keep-install-specs");
 
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 0);
-        _fixture.ReadRoot().Installations.Should().ContainSingle();
-        _fixture.ReadRoot().InstallSpecs.Should().ContainSingle().Which.VersionOrChannel.Should().Be("11");
+        exitCode.Should().Be(1, output);
+        output.Should().Contain("cannot be used together");
+        File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
+    }
+
+    [TestMethod]
+    public void KeepWithMatchingSpec_IsRejectedBeforeMutation()
+    {
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0.100", "11.0");
+        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
+
+        var output = Run(["sdk", "uninstall", "11.0.100"], out var exitCode, "", "--keep-install-specs");
+
+        exitCode.Should().Be(1, output);
+        Compact(output).Should().Contain("matches a standalone install spec");
+        File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
     }
 
     [TestMethod]
     [DataRow("11.0")]
     [DataRow("9.0")]
-    [DataRow("11.0.100")]
-    public void LatestSpec_DoesNotMatchDifferentStoredSpecName(string requested)
+    [DataRow("preview")]
+    [DataRow("daily")]
+    public void UnregisteredChannel_DoesNotResolveOrRemoveOverlappingSpec(string argument)
     {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
         _fixture.AddSpecs(InstallComponent.SDK, "latest");
         var before = File.ReadAllText(_fixture.Environment.ManifestPath);
 
-        var output = Run(["sdk", "uninstall", requested], out var exitCode);
+        var output = Run(["sdk", "uninstall", argument], out var exitCode, "", "--remove-install-specs");
 
         exitCode.Should().Be(1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        output.Should().Contain("No");
-        output.Should().Contain("install spec found");
+        Compact(output).Should().Contain("No saved .NET SDK install spec or installed version matches");
         File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-    }
-
-    [TestMethod]
-    public void MultipleUninstallArguments_AreRejectedWithoutChangingState()
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "9.0", "11.0", "latest");
-        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
-
-        var output = Run(["sdk", "uninstall", "11.0", "9.0"], out var exitCode);
-
-        exitCode.Should().Be(1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        output.Should().Contain("9.0");
-        File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-    }
-
-    [TestMethod]
-    public void UninstallLatest_RemovesOlderAndNewerUnreferencedStableVersions()
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "latest");
-
-        var output = Run(["sdk", "uninstall", "latest"], out var exitCode, input: "");
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        _fixture.ReadRoot().Installations.Should().BeEmpty();
-        _fixture.ReadRoot().InstallSpecs.Should().BeEmpty();
-    }
-
-    [TestMethod]
-    public void OtherRuntimeComponentsRetainedByMultipleSpecs_DoNotWarn()
-    {
-        _fixture.AddInstallation(InstallComponent.Runtime, "11.0.0");
-        _fixture.AddSpecs(InstallComponent.Runtime, "11.0");
-        foreach (var component in new[] { InstallComponent.ASPNETCore, InstallComponent.WindowsDesktop })
-        {
-            _fixture.AddInstallation(component, "11.0.0");
-            _fixture.AddSpecs(component, "11", "11.0.0");
-        }
-
-        var output = Run(["runtime", "uninstall", "runtime@11.0"], out var exitCode, input: "");
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        _fixture.ReadRoot().Installations.Select(i => i.Component)
-            .Should().BeEquivalentTo([InstallComponent.ASPNETCore, InstallComponent.WindowsDesktop]);
-        AssertFilesRemoved(InstallComponent.Runtime, "11.0.0");
-    }
-
-    [TestMethod]
-    [DataRow("sdk", InstallComponent.SDK, "11.0.100", InstallComponent.Runtime, "11.0.0")]
-    [DataRow("runtime", InstallComponent.Runtime, "11.0.0", InstallComponent.SDK, "11.0.100")]
-    public void UnreferencedOtherComponentWithSameMajor_WarnsAboutActualRemoval(
-        string noun, InstallComponent component, string target, InstallComponent otherComponent, string other)
-    {
-        _fixture.AddInstallation(component, target);
-        _fixture.AddInstallation(otherComponent, other);
-        _fixture.AddSpecs(component, "11.0");
-
-        var output = Run([noun, "uninstall", "11.0"], out var exitCode);
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 1, prompts: 1);
-        output.Should().Contain($"{otherComponent.GetDisplayName()} {other} will also be uninstalled");
-        _fixture.ReadRoot().Installations.Should().BeEmpty();
     }
 
     [TestMethod]
     [DataRow("11.0@core")]
     [DataRow("core@11.0")]
-    public void UnsupportedRuntimeComponentSyntax_IsRejectedWithoutMutation(string request)
+    public void UnsupportedRuntimeSyntax_IsRejectedWithoutMutation(string argument)
     {
         _fixture.AddInstallation(InstallComponent.Runtime, "11.0.0");
         _fixture.AddSpecs(InstallComponent.Runtime, "11.0");
         var before = File.ReadAllText(_fixture.Environment.ManifestPath);
 
-        var output = Run(["runtime", "uninstall", request], out var exitCode, input: "");
+        Run(["runtime", "uninstall", argument], out var exitCode, "");
 
-        exitCode.Should().Be(1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
+        exitCode.Should().Be(1);
         File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
     }
 
     [TestMethod]
-    public void RequestedChannelAbsent_OverlappingSpecsDoNotGetRemoved()
+    public void MultipleArguments_AreRejectedWithoutMutation()
     {
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "11", "11.0.1xx");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "9.0");
         var before = File.ReadAllText(_fixture.Environment.ManifestPath);
 
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
+        Run(["sdk", "uninstall", "11.0", "9.0"], out var exitCode, "");
 
-        exitCode.Should().Be(1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
+        exitCode.Should().Be(1);
         File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
     }
 
     [TestMethod]
-    [DataRow("sdk", "11.0", InstallComponent.SDK, "11.0.100", "11.0.1xx")]
-    [DataRow("sdk", "11.0.100", InstallComponent.SDK, "11.0.100", "11.0.1xx")]
-    [DataRow("runtime", "11.0", InstallComponent.Runtime, "11.0.0", "11.0.0")]
-    public void SharedTarget_ListsBothRemainingSpecsAndKeepsFiles(
-        string noun, string request, InstallComponent component, string version, string otherSpec)
-    {
-        _fixture.AddInstallation(component, version);
-        _fixture.AddSpecs(component, request, "11", otherSpec);
-
-        var output = Run([noun, "uninstall", request], out var exitCode);
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 1);
-        output.Should().Contain($"{component.GetDisplayName()} 11 (source: Explicit)");
-        output.Should().Contain($"{component.GetDisplayName()} {otherSpec} (source: Explicit)");
-        output.Should().NotContain("The retained versions listed above");
-        var removalMessage = $"Install spec '{request}' ({component.GetDisplayName()}; source: Explicit) will be removed from tracking.";
-        Count(output, removalMessage).Should().Be(1);
-        output.IndexOf(removalMessage, StringComparison.Ordinal)
-            .Should().BeLessThan(output.IndexOf("Proceed with uninstall?", StringComparison.Ordinal));
-        _fixture.ReadRoot().Installations.Should().ContainSingle();
-        _fixture.ReadRoot().InstallSpecs.Select(s => s.VersionOrChannel).Should().BeEquivalentTo(["11", otherSpec]);
-    }
-
-    [TestMethod]
-    [DataRow(false)]
-    [DataRow(true)]
-    public void OlderAndNewerPatchesWithSameChannel_BothRemovedWithoutWarning(bool duplicateSpec)
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.104");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
-        if (duplicateSpec)
-        {
-            _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
-            {
-                Component = InstallComponent.SDK, VersionOrChannel = "11.0", InstallSource = InstallSource.Explicit
-            }));
-        }
-
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, input: "");
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        Count(output, "Dereferenced .NET SDK 11.0").Should().Be(1);
-        _fixture.ReadRoot().Installations.Should().BeEmpty();
-        _fixture.ReadRoot().InstallSpecs.Should().BeEmpty();
-        AssertFilesRemoved(InstallComponent.SDK, "11.0.100");
-        AssertFilesRemoved(InstallComponent.SDK, "11.0.104");
-    }
-
-    [TestMethod]
-    public void LatestKeepsOnlyNewerPatch_OnlyNewerPatchHasRetentionWarning()
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.104");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "latest");
-
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 1);
-        output.Should().Contain("11.0.104 will not be uninstalled");
-        output.Should().NotContain("11.0.100 will not be uninstalled");
-        _fixture.ReadRoot().Installations.Should().ContainSingle().Which.Version.Should().Be("11.0.104");
-        AssertFilesRemoved(InstallComponent.SDK, "11.0.100");
-    }
-
-    [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public void ChannelTargetsMultipleSharedVersions_OnePromptAndOneWarningPerVersion(bool accept)
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.104");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "11.0.100", "11.0.104");
-        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
-
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, accept ? "y\n" : "n\n");
-
-        exitCode.Should().Be(accept ? 0 : 1, output);
-        AssertWarningCounts(output, retained: 2, unexpected: 1, prompts: 1);
-        if (accept)
-        {
-            _fixture.ReadRoot().Installations.Select(i => i.Version).Should().BeEquivalentTo(["11.0.100", "11.0.104"]);
-            _fixture.ReadRoot().InstallSpecs.Select(s => s.VersionOrChannel).Should().BeEquivalentTo(["11.0.100", "11.0.104"]);
-            AssertFilesRemoved(InstallComponent.SDK, "9.0.100");
-        }
-        else
-        {
-            File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-        }
-    }
-
-    [TestMethod]
-    public void RefreshedGlobalJson_KeepsTargetAndListsItsPath()
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
-        var directory = Path.Combine(_fixture.Environment.TempRoot, "[repository]");
-        Directory.CreateDirectory(directory);
-        var globalJson = Path.Combine(directory, "global.json");
-        File.WriteAllText(globalJson, """{"sdk":{"version":"11.0.100"}}""");
-        _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
-        {
-            Component = InstallComponent.SDK, VersionOrChannel = "9.0.1xx",
-            InstallSource = InstallSource.GlobalJson, GlobalJsonPath = globalJson
-        }));
-
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 1);
-        output.Should().Contain($".NET SDK 11.0.1xx (source: {globalJson})");
-        _fixture.ReadRoot().Installations.Should().ContainSingle();
-        _fixture.ReadRoot().InstallSpecs.Should().ContainSingle().Which.VersionOrChannel.Should().Be("11.0.1xx");
-    }
-
-    [TestMethod]
-    public void SdkSpecKeepsRuntimeFiles_WarnsThatRuntimeWillRemainInstalled()
+    public void SharedRuntimeFiles_StayProtectedBySurvivingSdk()
     {
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100", "shared/Microsoft.NETCore.App/11.0.0");
         _fixture.AddInstallation(InstallComponent.Runtime, "11.0.0");
         _fixture.AddSpecs(InstallComponent.SDK, "11.0");
         _fixture.AddSpecs(InstallComponent.Runtime, "11.0");
 
-        var output = Run(["runtime", "uninstall", "11.0"], out var exitCode);
+        var output = Run(["runtime", "uninstall", "11.0"], out var exitCode, "");
 
         exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 1);
-        output.Should().Contain("dotnet (runtime) 11.0.0 will not be uninstalled");
-        output.Should().Contain(".NET SDK 11.0 (source: Explicit)");
+        _fixture.ReadRoot().Installations.Should().ContainSingle().Which.Component.Should().Be(InstallComponent.SDK);
         Directory.Exists(Path.Combine(_fixture.Environment.InstallPath, "shared", "Microsoft.NETCore.App", "11.0.0"))
             .Should().BeTrue();
+        Compact(output).Should().Contain("Its files are still used by another installation.");
+        output.Should().NotContain("Uninstalled .NET Runtime");
     }
 
     [TestMethod]
-    public void DuplicateManifestEntries_DoNotDuplicateWarningsOrSpecMessages()
+    public void DuplicateSpecs_DoNotRepeatRemovalMessages()
     {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100");
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "latest");
-        _fixture.AlterManifest(root =>
-        {
-            root.Installations.Add(root.Installations.Single(i => i.Version == "9.0.100"));
-            root.Installations.Add(root.Installations.Single(i => i.Version == "11.0.100"));
-            root.InstallSpecs.Add(new InstallSpec
-            {
-                Component = InstallComponent.SDK, VersionOrChannel = "latest", InstallSource = InstallSource.Explicit
-            });
-        });
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
+        _fixture.AlterManifest(root => root.InstallSpecs.Add(root.InstallSpecs[0]));
 
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
+        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode, "");
 
         exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 1, prompts: 1);
-        Count(output, ".NET SDK latest (source: Explicit)").Should().Be(1);
-        Count(output, "Removed sdk/9.0.100").Should().Be(1);
-        output.Should().Contain(".NET SDK 9.0.100 will be uninstalled");
-        output.Should().NotContain("will also be uninstalled");
+        Regex.Matches(output, "Removed install spec:").Count.Should().Be(1);
+        _fixture.ReadRoot().InstallSpecs.Should().BeEmpty();
     }
 
     [TestMethod]
-    public void InvalidExternallyEditedVersion_FailsWithoutDeletingAnything()
+    public void ExternallyEditedInvalidVersion_FailsWithoutDeletingFiles()
     {
         _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
         _fixture.AddSpecs(InstallComponent.SDK, "11.0");
@@ -443,139 +294,78 @@ public class UninstallEndToEndTests : IDisposable
         var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
 
         exitCode.Should().Be(1, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 0, prompts: 0);
-        output.Should().Contain("modified outside of dotnetup");
+        Compact(output).Should().Contain("modified outside of dotnetup");
         File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
         Directory.Exists(Path.Combine(_fixture.Environment.InstallPath, "sdk", "11.0.100")).Should().BeTrue();
     }
 
     [TestMethod]
-    public void RepositoryOnly_GuidanceExplainsHowToChangeRequirement()
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow("--remove-install-specs")]
+    [DataRow("--keep-install-specs")]
+    public void LockedComponent_ReportsPartialFailureAndSupportsRetry(string option)
     {
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        var directory = Path.Combine(_fixture.Environment.TempRoot, "[repository]");
-        Directory.CreateDirectory(directory);
-        var globalJson = Path.Combine(directory, "global.json");
-        File.WriteAllText(globalJson, """{"sdk":{"version":"11.0.100"}}""");
-        _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
+        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100", "shared/Microsoft.NETCore.App/11.0.0");
+        _fixture.AddSpecs(InstallComponent.SDK, "11.0");
+        var lockedPath = Path.Combine(_fixture.Environment.InstallPath, "sdk", "11.0.100", "locked.dll");
+        using (File.Open(lockedPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
         {
-            Component = InstallComponent.SDK, VersionOrChannel = "11.0",
-            InstallSource = InstallSource.GlobalJson, GlobalJsonPath = globalJson
-        }));
-        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
+            var output = Run(["sdk", "uninstall", "11.0.100"], out var exitCode, "", option);
 
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode);
-
-        exitCode.Should().Be(1, output);
-        output.Should().Contain(BootstrapperStrings.UninstallRepositoryRequirement).And.Contain(globalJson);
-        output.Should().NotContain("--source");
-        File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-    }
-
-    [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public void StandaloneSpecs_ListsEachSpecBeforeConfirmationAndPreservesGlobalJson(bool accept)
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "11.0.100");
-        _fixture.AddSpecs(InstallComponent.SDK, "11.0", "11");
-        _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
-        {
-            Component = InstallComponent.SDK, VersionOrChannel = "11.0", InstallSource = InstallSource.Migration
-        }));
-        var directory = Path.Combine(_fixture.Environment.TempRoot, "[repository]");
-        Directory.CreateDirectory(directory);
-        var globalJson = Path.Combine(directory, "global.json");
-        const string GlobalJsonContents = """{"sdk":{"version":"11.0.100"}}""";
-        File.WriteAllText(globalJson, GlobalJsonContents);
-        _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
-        {
-            Component = InstallComponent.SDK, VersionOrChannel = "11.0",
-            InstallSource = InstallSource.GlobalJson, GlobalJsonPath = globalJson
-        }));
-        var before = File.ReadAllText(_fixture.Environment.ManifestPath);
-
-        var output = Run(["sdk", "uninstall", "11.0"], out var exitCode,
-            accept ? "y\n" : "n\n");
-
-        exitCode.Should().Be(accept ? 0 : 1, output);
-        AssertWarningCounts(output, retained: 1, unexpected: 0, prompts: 1);
-        Count(output, "will be removed from tracking.").Should().Be(2);
-        var explicitMessage = "Install spec '11.0' (.NET SDK; source: Explicit) will be removed from tracking.";
-        var migrationMessage = "Install spec '11.0' (.NET SDK; source: Migration) will be removed from tracking.";
-        output.Should().Contain(explicitMessage).And.Contain(migrationMessage);
-        output.Should().NotContain($"Install spec '11.0' (.NET SDK; source: {globalJson}) will be removed from tracking.");
-        output.IndexOf(explicitMessage, StringComparison.Ordinal)
-            .Should().BeLessThan(output.IndexOf("Proceed with uninstall?", StringComparison.Ordinal));
-        output.IndexOf(migrationMessage, StringComparison.Ordinal)
-            .Should().BeLessThan(output.IndexOf("Proceed with uninstall?", StringComparison.Ordinal));
-        File.ReadAllText(globalJson).Should().Be(GlobalJsonContents);
-        if (accept)
-        {
-            var specs = _fixture.ReadRoot().InstallSpecs;
-            specs.Should().HaveCount(2);
-            specs.Should().ContainSingle(s => s.InstallSource == InstallSource.Explicit && s.VersionOrChannel == "11");
-            specs.Should().ContainSingle(s => s.InstallSource == InstallSource.GlobalJson && s.GlobalJsonPath == globalJson);
+            exitCode.Should().Be(1, output);
+            Compact(output).Should().Contain("Removal was incomplete.")
+                .And.Contain("shared/Microsoft.NETCore.App/11.0.0").And.Contain("sdk/11.0.100")
+                .And.NotContain("Done.").And.NotContain("Removed install spec:");
+            var root = _fixture.ReadRoot();
+            root.InstallSpecs.Should().ContainSingle();
+            root.Installations.Should().ContainSingle().Which.RemovalPending.Should().BeTrue();
         }
-        else
-        {
-            File.ReadAllText(_fixture.Environment.ManifestPath).Should().Be(before);
-        }
-    }
 
-    [TestMethod]
-    public void UntrackedRequestedRuntimeFiles_RemoveOrphanSdkWithAlsoWarning()
-    {
-        _fixture.AddInstallation(InstallComponent.SDK, "9.0.100", "shared/Microsoft.NETCore.App/11.0.0");
-        _fixture.AddSpecs(InstallComponent.Runtime, "11.0");
+        var retry = Run(["sdk", "uninstall", "11.0.100"], out var retryExitCode, "", option);
 
-        var output = Run(["runtime", "uninstall", "11.0"], out var exitCode);
-
-        exitCode.Should().Be(0, output);
-        AssertWarningCounts(output, retained: 0, unexpected: 1, prompts: 1);
-        output.Should().Contain(".NET SDK 9.0.100 will also be uninstalled");
+        retryExitCode.Should().Be(0, retry);
         _fixture.ReadRoot().Installations.Should().BeEmpty();
-        AssertFilesRemoved(InstallComponent.SDK, "9.0.100");
-        AssertFilesRemoved(InstallComponent.Runtime, "11.0.0");
+        _fixture.ReadRoot().InstallSpecs.Should().HaveCount(option == "--keep-install-specs" ? 1 : 0);
     }
 
-    private string Run(string[] command, out int exitCode, string input = "y\n", params string[] options)
+    private string AddRepository()
+    {
+        var directory = Path.Combine(_fixture.Environment.TempRoot, "[repository]");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "global.json");
+        File.WriteAllText(path, """{"sdk":{"version":"11.0.100","rollForward":"latestPatch","allowPrerelease":false}}""");
+        _fixture.AlterManifest(root => root.InstallSpecs.Add(new InstallSpec
+        {
+            Component = InstallComponent.SDK, VersionOrChannel = "9.0.1xx",
+            InstallSource = InstallSource.GlobalJson, GlobalJsonPath = path
+        }));
+        return path;
+    }
+
+    private static string[] Command(string noun, string argument) =>
+        noun == "alias" ? ["uninstall", argument] : [noun, "uninstall", argument];
+
+    private string Run(string[] command, out int exitCode, string input = "", params string[] options)
     {
         var environment = _fixture.Environment;
-        string[] arguments =
-        [
-            .. command, "--manifest-path", environment.ManifestPath,
-            "--install-path", environment.InstallPath, "--interactive", "true", .. options
-        ];
         var result = DotnetupTestUtilities.RunDotnetupProcess(
-            arguments, captureOutput: true, workingDirectory: environment.TempRoot,
+            [.. command, "--manifest-path", environment.ManifestPath, "--install-path", environment.InstallPath,
+                "--interactive", "true", .. options],
+            captureOutput: true, workingDirectory: environment.TempRoot,
             environmentVariables: new Dictionary<string, string>
             {
                 ["DOTNET_TESTHOOK_DOTNETUP_DATA_DIR"] = environment.TempRoot,
                 ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
-            },
-            standardInput: input, timeoutMilliseconds: 60_000);
+            }, standardInput: input, timeoutMilliseconds: 60_000);
         exitCode = result.exitCode;
         return ConsoleOutputNormalizer.Normalize(result.output);
     }
 
-    private static void AssertWarningCounts(string output, int retained, int unexpected, int prompts)
-    {
-        Count(output, "will not be uninstalled").Should().Be(retained, output);
-        var unexpectedCount = Count(output, "will be uninstalled") + Count(output, "will also be uninstalled");
-        unexpectedCount.Should().Be(unexpected, output);
-        Count(output, "Proceed with uninstall?").Should().Be(prompts, output);
-    }
+    private static string Compact(string output) => Regex.Replace(output, @"\s+", " ");
 
-    private static int Count(string output, string message) => Regex.Matches(output, Regex.Escape(message)).Count;
-
-    private void AssertFilesRemoved(InstallComponent component, string version)
-    {
-        var path = component == InstallComponent.SDK
-            ? Path.Combine(_fixture.Environment.InstallPath, "sdk", version)
-            : Path.Combine(_fixture.Environment.InstallPath, "shared", component.GetFrameworkName(), version);
-        Directory.Exists(path).Should().BeFalse(path);
-    }
+    private void AssertFilesRemoved(InstallComponent component, string version) =>
+        Directory.Exists(DotnetupSharedManifest.GetComponentDirectory(_fixture.Environment.InstallPath,
+            new Installation { Component = component, Version = version })).Should().BeFalse();
 
     public void Dispose() => _fixture.Dispose();
 }

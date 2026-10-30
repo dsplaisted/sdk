@@ -6,6 +6,7 @@ using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Shared;
 using Microsoft.DotNet.Tools.Dotnetup.Tests.Utilities;
+using Microsoft.DotNet.Tools.Dotnetup.Tests.Mocks;
 using Microsoft.Deployment.DotNet.Releases;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests;
@@ -126,7 +127,7 @@ public class UpdateWorkflowTests
         File.WriteAllText(Path.Combine(root.Path, DotnetupUtilities.GetDotnetExeName()), "");
         var releases = new OfflineReleaseManifest();
         var resolver = new ChannelVersionResolver(releases, new DailyChannelResolver(releases));
-        var workflow = new UpdateWorkflow(resolver);
+        var workflow = new UpdateWorkflow(resolver, new MockInstallationValidator(validateResult: true));
         workflow.Execute(env.ManifestPath, root.Path, InstallComponent.SDK, noProgress: true);
         var saved = manifest.GetInstallSpecs(root).Single();
         saved.MinimumVersion.Should().Be("10.0.103");

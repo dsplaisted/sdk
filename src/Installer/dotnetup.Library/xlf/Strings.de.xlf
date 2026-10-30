@@ -421,11 +421,6 @@ Or open a new terminal.</target>
         <target state="new">Warning: Cannot read {0}: {1}</target>
         <note>0: global.json path, 1: error details.</note>
       </trans-unit>
-      <trans-unit id="InstallSpecSource">
-        <source>(source: {0})</source>
-        <target state="new">(source: {0})</target>
-        <note>{0} is an install-source identifier or a global.json path.</note>
-      </trans-unit>
       <trans-unit id="ListAspNetCoreRuntimeComponent">
         <source>ASP.NET Core Runtime</source>
         <target state="new">ASP.NET Core Runtime</target>
@@ -786,55 +781,213 @@ Or open a new terminal.</target>
         <target state="new">dotnetup collects usage data to help improve your experience. You can opt out by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1'. Learn more: https://aka.ms/dotnetup-telemetry</target>
         <note />
       </trans-unit>
+      <trans-unit id="UninstallActionRequired">
+        <source>Choose --remove-install-specs to remove the listed install specs, or --keep-install-specs to uninstall the version without modifying install specs. No changes were made.</source>
+        <target state="new">Choose --remove-install-specs to remove the listed install specs, or --keep-install-specs to uninstall the version without modifying install specs. No changes were made.</target>
+        <note>{Locked="--remove-install-specs"}{Locked="--keep-install-specs"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallAlreadyMissing">
+        <source>{0} {1} was already missing; no files for that version were removed.</source>
+        <target state="new">{0} {1} was already missing; no files for that version were removed.</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallCancelChoice">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UninstallCancelled">
         <source>Uninstall cancelled. No install specs or files were removed.</source>
         <target state="new">Uninstall cancelled. No install specs or files were removed.</target>
         <note />
       </trans-unit>
-      <trans-unit id="UninstallConfirmationPrompt">
-        <source>Proceed with uninstall?</source>
-        <target state="new">Proceed with uninstall?</target>
+      <trans-unit id="UninstallChooseAction">
+        <source>Choose an action:</source>
+        <target state="new">Choose an action:</target>
         <note />
       </trans-unit>
-      <trans-unit id="UninstallDereferencedSpec">
-        <source>Dereferenced {0} {1} {2}</source>
-        <target state="new">Dereferenced {0} {1} {2}</target>
-        <note>{0} is a component name; {1} is a highlighted version or channel; {2} is the formatted install-source description.</note>
+      <trans-unit id="UninstallChooseNumber">
+        <source>Enter 1, 2, or 3. Press Enter to cancel.</source>
+        <target state="new">Enter 1, 2, or 3. Press Enter to cancel.</target>
+        <note />
       </trans-unit>
-      <trans-unit id="UninstallNoMatchingInstallations">
-        <source>No command-line or migration install spec found for {0} '{1}' at {2}.</source>
-        <target state="new">No command-line or migration install spec found for {0} '{1}' at {2}.</target>
-        <note>{0} is a component name; {1} is a version or channel; {2} is the installation root path.</note>
+      <trans-unit id="UninstallConflictingOptions">
+        <source>--remove-install-specs and --keep-install-specs cannot be used together.</source>
+        <target state="new">--remove-install-specs and --keep-install-specs cannot be used together.</target>
+        <note>{Locked="--remove-install-specs"}{Locked="--keep-install-specs"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallIncompleteInstallation">
+        <source>A previous removal was interrupted or failed. Retry uninstall or install this version again to repair it.</source>
+        <target state="new">A previous removal was interrupted or failed. Retry uninstall or install this version again to repair it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallKeepChoice">
+        <source>Uninstall {0} {1} without modifying install specs</source>
+        <target state="new">Uninstall {0} {1} without modifying install specs</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallKeepMatchingSpec">
+        <source>The argument matches a standalone install spec. --keep-install-specs cannot be used because uninstall removes that spec first. Run dotnetup list to see install specs.</source>
+        <target state="new">The argument matches a standalone install spec. --keep-install-specs cannot be used because uninstall removes that spec first. Run dotnetup list to see install specs.</target>
+        <note>{Locked="--keep-install-specs"}{Locked="dotnetup list"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallKeepSpecsOption">
+        <source>Uninstall only the version without modifying install specs. Not valid when a standalone spec matches.</source>
+        <target state="new">Uninstall only the version without modifying install specs. Not valid when a standalone spec matches.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallKeptSpecs">
+        <source>Install specs were kept. A later install or update may install this version again.</source>
+        <target state="new">Install specs were kept. A later install or update may install this version again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallNoSdkRemains">
+        <source>No SDKs remain in the managed installation.</source>
+        <target state="new">No SDKs remain in the managed installation.</target>
+        <note>{Locked="SDKs"}</note>
       </trans-unit>
       <trans-unit id="UninstallNoTrackedInstallations">
         <source>No tracked installations found at {0}.</source>
         <target state="new">No tracked installations found at {0}.</target>
         <note>{0} is the installation root path.</note>
       </trans-unit>
-      <trans-unit id="UninstallRemovalSummary">
-        <source>Install spec '{0}' ({1}; source: {2}) will be removed from tracking.</source>
-        <target state="new">Install spec '{0}' ({1}; source: {2}) will be removed from tracking.</target>
-        <note>{0} is a highlighted version or channel; {1} is a component name; {2} is an install-source identifier or a global.json path.</note>
+      <trans-unit id="UninstallNoVersionsRemoved">
+        <source>No {0} versions were uninstalled.</source>
+        <target state="new">No {0} versions were uninstalled.</target>
+        <note>{0} is the component name.</note>
       </trans-unit>
-      <trans-unit id="UninstallRepositoryRequirement">
-        <source>To change or remove a repository SDK requirement, update or delete its global.json file:</source>
-        <target state="new">To change or remove a repository SDK requirement, update or delete its global.json file:</target>
-        <note>{Locked="global.json"}</note>
+      <trans-unit id="UninstallPartialFailure">
+        <source>Removal was incomplete. Removed directories: {0}. Failed to remove {1} directories; last failure: {2}. Remaining paths were reported above. Install specs and incomplete installation records were preserved for retry or repair.</source>
+        <target state="new">Removal was incomplete. Removed directories: {0}. Failed to remove {1} directories; last failure: {2}. Remaining paths were reported above. Install specs and incomplete installation records were preserved for retry or repair.</target>
+        <note>{0} lists successfully removed directories; {1} is the failure count; {2} is the last failed relative path.</note>
       </trans-unit>
-      <trans-unit id="UninstallRetainedInstallation">
-        <source>{0} will [bold]not[/] be uninstalled because it has other install specs that require it:</source>
-        <target state="new">{0} will [bold]not[/] be uninstalled because it has other install specs that require it:</target>
-        <note>{0} is a highlighted component name and installed version. {Locked="[bold]"}{Locked="[/]"}</note>
+      <trans-unit id="UninstallPlanChanged">
+        <source>Installations or repository requirements changed while choosing an uninstall action. No changes were made. Run the command again to review the current requirements.</source>
+        <target state="new">Installations or repository requirements changed while choosing an uninstall action. No changes were made. Run the command again to review the current requirements.</target>
+        <note />
       </trans-unit>
-      <trans-unit id="UninstallUnexpectedAdditionalRemoval">
-        <source>{0} will [bold]also[/] be [bold]uninstalled[/] because it is no longer referenced by any install specs.</source>
-        <target state="new">{0} will [bold]also[/] be [bold]uninstalled[/] because it is no longer referenced by any install specs.</target>
-        <note>{0} is a highlighted component name and installed version. Used only when the operation also removes files for the requested component and channel. {Locked="[bold]"}{Locked="[/]"}</note>
+      <trans-unit id="UninstallReinstallWarningMany">
+        <source>If you keep the install specs, later install or update commands may reinstall this SDK.</source>
+        <target state="new">If you keep the install specs, later install or update commands may reinstall this SDK.</target>
+        <note>{Locked="SDK"}</note>
       </trans-unit>
-      <trans-unit id="UninstallUnexpectedRemoval">
-        <source>{0} will be [bold]uninstalled[/] because it is no longer referenced by any install specs.</source>
-        <target state="new">{0} will be [bold]uninstalled[/] because it is no longer referenced by any install specs.</target>
-        <note>{0} is a highlighted component name and installed version. {Locked="[bold]"}{Locked="[/]"}</note>
+      <trans-unit id="UninstallReinstallWarningOne">
+        <source>If you keep the install spec, later install or update commands may reinstall this SDK.</source>
+        <target state="new">If you keep the install spec, later install or update commands may reinstall this SDK.</target>
+        <note>{Locked="SDK"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallRemoveChoiceMany">
+        <source>Uninstall {0} {1} and remove the listed install specs</source>
+        <target state="new">Uninstall {0} {1} and remove the listed install specs</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRemoveChoiceOne">
+        <source>Uninstall {0} {1} and remove the listed install spec</source>
+        <target state="new">Uninstall {0} {1} and remove the listed install spec</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRemoveSpecsOption">
+        <source>Uninstall the version and remove its install specs. A matching standalone spec is removed first.</source>
+        <target state="new">Uninstall the version and remove its install specs. A matching standalone spec is removed first.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallRemovedRecord">
+        <source>Removed the {0} {1} installation record. Its files are still used by another installation.</source>
+        <target state="new">Removed the {0} {1} installation record. Its files are still used by another installation.</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRemovedSpec">
+        <source>Removed install spec: {0} {1} ({2}).</source>
+        <target state="new">Removed install spec: {0} {1} ({2}).</target>
+        <note>{0} is the component name; {1} is its channel or version; {2} is its source.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRemovedVersion">
+        <source>Uninstalled {0} {1}.</source>
+        <target state="new">Uninstalled {0} {1}.</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRepositoryWarningMany">
+        <source>Removing the install specs stops tracking the listed global.json files, but does not change them.
+These repositories may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register a repository again, run dotnetup sdk install in that repository.</source>
+        <target state="new">Removing the install specs stops tracking the listed global.json files, but does not change them.
+These repositories may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register a repository again, run dotnetup sdk install in that repository.</target>
+        <note>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallRepositoryWarningOne">
+        <source>Removing the install specs stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register the repository again, run dotnetup sdk install in that repository.</source>
+        <target state="new">Removing the install specs stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install specs, future updates will no longer install SDKs for them.
+To register the repository again, run dotnetup sdk install in that repository.</target>
+        <note>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallRequiredByMany">
+        <source>{0} {1} is required by the following install specs:</source>
+        <target state="new">{0} {1} is required by the following install specs:</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRequiredByOne">
+        <source>{0} {1} is required by the following install spec:</source>
+        <target state="new">{0} {1} is required by the following install spec:</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRetainedByMany">
+        <source>{0} {1} was kept because the following install specs still resolve to it:</source>
+        <target state="new">{0} {1} was kept because the following install specs still resolve to it:</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRetainedByOne">
+        <source>{0} {1} was kept because the following install spec still resolves to it:</source>
+        <target state="new">{0} {1} was kept because the following install spec still resolves to it:</target>
+        <note>{0} is the component name; {1} is its version.</note>
+      </trans-unit>
+      <trans-unit id="UninstallRuntimeDescription">
+        <source>Removes a runtime install spec or an installed runtime version and cleans up unused components.</source>
+        <target state="new">Removes a runtime install spec or an installed runtime version and cleans up unused components.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallRuntimeReinstallWarningMany">
+        <source>If you keep the install specs, later install or update commands may reinstall this runtime.</source>
+        <target state="new">If you keep the install specs, later install or update commands may reinstall this runtime.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallRuntimeReinstallWarningOne">
+        <source>If you keep the install spec, later install or update commands may reinstall this runtime.</source>
+        <target state="new">If you keep the install spec, later install or update commands may reinstall this runtime.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UninstallSdkDescription">
+        <source>Removes an SDK install spec or an installed SDK version and cleans up unused components.</source>
+        <target state="new">Removes an SDK install spec or an installed SDK version and cleans up unused components.</target>
+        <note>{Locked="SDK"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallSingleRepositorySpecWarning">
+        <source>Removing the install spec stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install spec, future updates will no longer install SDKs for it.
+To register the repository again, run dotnetup sdk install in that repository.</source>
+        <target state="new">Removing the install spec stops tracking the listed global.json file, but does not change it.
+This repository may no longer build with the installed SDKs.
+If you remove the install spec, future updates will no longer install SDKs for it.
+To register the repository again, run dotnetup sdk install in that repository.</target>
+        <note>{Locked="global.json"}{Locked="SDKs"}{Locked="dotnetup sdk install"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallTargetNotFound">
+        <source>No saved {0} install spec or installed version matches '{1}' at {2}. Run dotnetup list to see installed versions and their install specs. To remove an installed version, specify its full version.</source>
+        <target state="new">No saved {0} install spec or installed version matches '{1}' at {2}. Run dotnetup list to see installed versions and their install specs. To remove an installed version, specify its full version.</target>
+        <note>{0} is a component name; {1} is the argument; {2} is the install root. {Locked="dotnetup list"}</note>
+      </trans-unit>
+      <trans-unit id="UninstallUnreadableRequirements">
+        <source>Some repository requirements could not be read and have no complete saved requirement. Install specs cannot safely be removed. Use --keep-install-specs to remove only the version, or repair the repository files and retry. No changes were made.</source>
+        <target state="new">Some repository requirements could not be read and have no complete saved requirement. Install specs cannot safely be removed. Use --keep-install-specs to remove only the version, or repair the repository files and retry. No changes were made.</target>
+        <note>{Locked="--keep-install-specs"}</note>
       </trans-unit>
     </body>
   </file>

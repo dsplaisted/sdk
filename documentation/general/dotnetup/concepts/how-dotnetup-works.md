@@ -64,11 +64,10 @@ You can learn more about the different kinds of supported channels and versions 
 
 Each specification has one of these sources:
 
-- `Explicit`: You supplied the channel or version on the command line.
-- `GlobalJson`: `dotnetup` derived the SDK requirement from a `global.json`
-  file.
-
-`All` is an uninstall filter. It is not stored as a specification source.
+- Command (`Explicit` in the manifest): You supplied the channel or version on the command line.
+- Migration: The requirement came from migrating an existing installation.
+- Repository file path (`GlobalJson` in the manifest): `dotnetup` derived the SDK
+  requirement from that `global.json` file.
 
 An exact version is a pinned specification. Update commands do not advance it.
 A channel specification can resolve to a newer version during an update.
@@ -83,6 +82,12 @@ Uninstall commands first remove matching specifications. Garbage collection
 then keeps the newest installed version that matches each remaining
 specification. It removes an installation and its unshared subcomponents only
 when no remaining specification needs them.
+
+If no standalone specification matches, uninstall can instead target a full
+installed version. Choose whether to remove its specifications or keep them.
+Keeping specifications removes only the named installation record, then collects
+components unreferenced by any other installation record. Later install or update
+commands may reinstall the version. See [SDK uninstall](../reference/dotnetup-sdk-uninstall.md).
 
 ## Tracked and untracked installs
 

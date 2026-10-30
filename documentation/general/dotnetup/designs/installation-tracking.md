@@ -8,7 +8,12 @@ When a user installs a .NET SDK or runtime with dotnetup, we will call the infor
 
 The effect of an update operation should be to install the latest version of the SDK or runtimes that matches each active install spec.  Any installations that are no longer needed by any active install specs would then be removed.
 
-An uninstall operation would be implemented as deleting an install spec and then running a garbage collection.  This may not actually delete or uninstall anything if there are other install specs that resolve to the same version.  In that case dotnetup should display a message explaining what happened (and what specs still refer to that version) so that the user doesn't get confused about why the version is still installed.  We might also want to offer some sort of force uninstall command.
+Uninstall first removes matching standalone install specs and runs garbage collection.
+If another spec keeps the selected version installed, explain that outcome and show
+the remaining requirements. Otherwise, a full installed version can target the physical
+installation, with a choice about keeping or removing its specs. See the
+[scenario-focused uninstall design](dotnetup-uninstall.md) for the action options
+and cancellation rules.
 
 ## Dotnetup shared manifest contents
 
@@ -33,6 +38,10 @@ We will store the manifest in json format.  At the top level it should have a sc
 - Component
 - Version (this is the exact version that is installed)
 - Subcomponents
+- `RemovalPending` (optional): An interrupted or failed deletion may have removed some
+  component files. Keep this record and its specs for retry or repair, and show it
+  as invalid in list output. Reinstall re-extracts incomplete components without
+  overwriting components protected by healthy installation records.
 
 ### Subcomponent
 
@@ -117,9 +126,11 @@ We could represent the dotnet roots in the manifest as a node which has properti
 
 ### Deleting a component
 
-- Remove corresponding install spec
-- Run garbage collection
-- If there's still an installation matching removed install spec, print message explaining why
+- Remove matching standalone specs without prompting, then run normal garbage collection.
+- If no standalone spec matches, target an exact installed version. Remove its
+  affected specs with normal collection, or preserve specs and remove just that
+  installation record before component collection. Cancel is the default choice.
+- Explain retained installations with the specs currently selecting them.
 
 ### Garbage collection
 
@@ -127,8 +138,14 @@ We could represent the dotnet roots in the manifest as a node which has properti
   - For install specs that came from a global.json file, update the versions in them if the global.json file has changed.  Delete those specs if the global.json file has been deleted (or no longer specifies a version).
   - Save the complete requirement after a successful read. If the file is unreadable or invalid, warn and use the saved requirement. If none was saved, skip garbage collection for this dotnet root.
   - For each install spec, find the latest installation record that matches.  Mark that installation record to keep for this garbage collection.
-- Delete all installation records from the manifest which weren't marked.
-- Iterate through all components installed in the dotnet root.  Remove any which are no longer listed under an installation record in the manifest.
+- Plan removal of installation records which weren't marked.
+- Plan removal of component directories no surviving installation record references.
+- Before deleting directories, persist a recovery checkpoint retaining specs and marking
+  affected installations `RemovalPending`. Commit planned spec and installation removals
+  only after deletion succeeds. On failure, report removed and remaining paths and leave
+  recovery state intact.
+- Physical-only removal skips installation collection: remove only the named record,
+  and protect components belonging to every other installation, even those no spec selects.
 
 ### Using dotnet roots that were not previously managed by dotnetup
 

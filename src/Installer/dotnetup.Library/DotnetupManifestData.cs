@@ -49,4 +49,6 @@ internal class Installation
     public InstallComponent Component { get; set; }
     public string Version { get; set; } = string.Empty;
     public List<string> Subcomponents { get; set; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RemovalPending { get; set; }
 }
