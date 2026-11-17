@@ -18,6 +18,11 @@ implemented. Physical-only removal collects components while preserving other
 installation records. Failed deletions preserve specs and mark affected
 installation records incomplete for retry or repair.
 
+The uninstall cleanup boundary proposed below is **not yet implemented**.
+Spec removal currently runs full installation collection; it needs to collect
+only newly unreferenced installations, plus any explicitly targeted installation.
+Physical-only removal and component collection need no change to their scope.
+
 ## Proposed behavior
 
 An **install spec** describes what dotnetup should keep installed: a component
@@ -28,8 +33,9 @@ to the same installation.
 `dotnetup sdk uninstall` behaves as follows:
 
 - If the argument matches a command-line or migrated install spec, remove it
-  without prompting and run normal garbage collection. If its resolved SDK
-  remains installed, explain why and show the other specs resolving to it.
+  without prompting and collect only installations newly unreferenced by that
+  removal. If its resolved SDK remains installed, explain why and show the
+  other specs resolving to it.
   This applies to both channels and exact versions.
 - Otherwise, if the argument names an installed SDK version and specs currently
   resolve to it, offer three choices: remove only that SDK and keep the specs,
@@ -46,16 +52,36 @@ than forcing the argument to name a physical installation; see
 
 Garbage collection has two levels: collecting installation records no remaining
 spec selects, then collecting component directories no remaining installation
-references. Normal garbage collection runs both levels when removing specs and
-may therefore remove other installations no remaining spec requires.
+references. Uninstall limits only the first level to changes caused by this
+operation:
+
+- Read current repository requirements before establishing the baseline.
+  An SDK released by an earlier `global.json` edit or deletion is already
+  unreferenced, even if the manifest still contains the old saved requirement.
+- When removing specs, collect an installation only if a spec selected it in
+  that baseline and no remaining spec selects it after the removal.
+- An explicitly targeted installed version can be removed even if it was
+  already unreferenced. Spec-first matching still applies: an argument matching
+  a standalone spec removes that spec, not an independently chosen installation.
+
+Component collection remains unchanged: delete directories no surviving
+installation references, including directories already orphaned before
+uninstall. Every retained installation protects its subcomponents, even if no
+spec currently selects it. Keeping the old installation records is therefore
+sufficient to keep the 8.0 and 9.0 SDKs and their shared files.
+
+Pre-existing unreferenced installations are not implicit uninstall targets.
+This changes only uninstall's installation collection; other commands' behavior
+is unchanged. In particular, update can still run full garbage collection.
+This does not introduce a separate cleanup command.
 
 SDK-only removal skips installation collection: remove just the named
 installation record and leave all specs and other installation records unchanged.
 Then run component collection using the subcomponents recorded for every remaining
-installation, including installations no spec currently selects. Delete component
-directories no remaining installation references, but retain shared runtimes,
-hosts, packs, and other components still in use. This can also clean up previously
-orphaned component directories; it must not collect another installation.
+installation, including installations no spec currently selects. Delete
+directories no remaining installation references, including previously orphaned
+directories. Retain shared runtimes, hosts, packs, and other components still
+in use. Do not collect another installation.
 
 Keeping specs does not create an exclusion, pin, or "do not reinstall" record.
 They continue to select the best matching installed SDK, or appear as
@@ -139,8 +165,8 @@ Use singular wording for one spec and plural wording for multiple specs:
 is the same in both cases. Cancel is the default selection.
 
 Choosing SDK-only removal removes the `10.0.103` installation record, then collects
-unreferenced components, but keeps the `10.0.1xx` spec. No other installation is
-removed. If no other SDK satisfies it, `dotnetup list`
+unreferenced components, but keeps the `10.0.1xx` spec. No other installation
+is removed. If no other SDK satisfies it, `dotnetup list`
 shows that spec as `Not installed`. Report:
 
 ```text
@@ -155,10 +181,11 @@ operations install the newest eligible SDK, which may be the removed version
 or a newer one. List and garbage collection do not reinstall missing SDKs.
 SDK-only removal does not change `global.json` or any saved requirement.
 
-Choosing spec removal removes the SDK and channel spec, then runs normal
-garbage collection. Cancel changes nothing. Unlike a channel that is not
-registered, an exact installed version is a meaningful target even without
-a matching saved spec.
+Choosing spec removal removes the SDK and channel spec, then collects only
+newly unreferenced installations and runs normal component collection.
+Cancel changes nothing. Unlike
+a channel that is not registered, an exact installed version is a meaningful
+target even without a matching saved spec.
 
 ### 3. An SDK is required by a global.json install spec
 
@@ -203,9 +230,10 @@ requirement becomes unsatisfied. Later install or update operations can restore
 an eligible SDK as in scenario 2. No other installation is removed.
 
 Choosing spec removal removes the SDK and the listed specs, including the
-repository registrations, then runs normal garbage collection. Cancel changes
-nothing. Apply the chosen plan once; do not remove one record, refresh stale
-duplicates, and require the same command again.
+repository registrations, then collects only newly unreferenced installations
+and runs normal component collection.
+Cancel changes nothing. Apply the chosen plan once; do not remove one record,
+refresh stale duplicates, and require the same command again.
 
 After spec removal, `dotnetup update` will not restore the removed registration.
 Running `dotnetup sdk install` in that repository registers it again.
@@ -256,10 +284,10 @@ alongside them. A later install or update can install `10.0.105` again, or a
 newer eligible SDK.
 
 Choosing spec removal removes both listed specs and SDK `10.0.105`, then runs
-normal garbage collection. The independent `10.0.103` pin and its installation
-remain unchanged. Only specs currently selecting the targeted SDK are offered
-for removal; the `10.0.103` pin is not one of them. Cancel keeps both SDKs and all
-specs unchanged.
+normal component collection. The independent `10.0.103` pin
+and its installation remain unchanged. Only specs currently selecting the
+targeted SDK are offered for removal; the `10.0.103` pin is not one of them.
+Cancel keeps both SDKs and all specs unchanged.
 
 SDK-only removal can expose an older installed SDK, but is not a persistent
 rollback policy. It neither downloads an older replacement nor prevents later
@@ -365,8 +393,9 @@ refresh the saved constraints. Deleting the file or removing its SDK version
 still deactivates the registration; those are deliberate changes rather than
 read failures.
 
-`dotnetup list` reflects those changes without deleting SDK files. The next
-cleanup-capable operation can collect SDKs no remaining spec keeps.
+`dotnetup list` reflects those changes without deleting SDK files. A later
+update can collect SDKs no remaining spec keeps. Uninstall does not
+collect them merely because it reconciles these repository changes.
 A changed requirement may appear without a
 satisfying installation until `dotnetup sdk install` is run in the repository.
 
@@ -375,6 +404,30 @@ Deleting the repository naturally stops tracking it. Stopping tracking while
 keeping the repository on disk is a possible future niche operation; it should
 not drive an overloaded uninstall syntax now. A physical-version uninstall
 can still prompt to remove repository registrations as in scenario 3.
+
+#### Uninstall does not also clean up SDKs released by repository changes
+
+SDKs `8.0.404`, `9.0.304`, and `10.0.103` are installed. Two registered
+repositories previously selected the 8.0 and 9.0 SDKs, but their `global.json`
+files now require `11.0.100`, which is not installed yet. No other specs select
+the 8.0 or 9.0 SDK. A command-line spec for `10.0` alone selects `10.0.103`.
+
+```console
+> dotnetup sdk uninstall 10.0
+Removed install spec: .NET SDK 10.0 (Command).
+Uninstalled SDK 10.0.103.
+```
+
+Keep `8.0.404` and `9.0.304` and their component directories. They were already
+unreferenced when uninstall began, not made unreferenced by removing `10.0`.
+`dotnetup list` still shows them as installation-only rows, and shows the
+repository requirements as `Not installed`. Deleting the repositories or
+removing their SDK requirements before uninstall has the same cleanup boundary.
+
+The user can explicitly run `dotnetup sdk uninstall 8.0.404` to remove that
+unreferenced installation without a spec-removal prompt. This still leaves
+`9.0.304` alone. An unrelated spec-only removal whose SDK is already missing
+also leaves both old SDKs alone.
 
 ### 8. The version's files are missing, or it was never installed
 
@@ -404,8 +457,15 @@ because of other specs, and any failures rather than routine shared-file handlin
 For SDK-only removal, component collection protects every other installation
 record, not just installations selected by current specs. A separately installed
 runtime or another SDK therefore keeps its shared components even if it is
-currently unreferenced by specs. For spec removal, normal installation collection
-runs first, and component collection protects the installations that remain.
+currently unreferenced by specs. For spec removal, collect only installations
+newly unreferenced by removing the specs, then protect all installations that
+remain. Both actions can collect directories that were already orphaned.
+
+For example, if the SDK being removed shares a runtime with an already
+unreferenced 9.0 installation, keep that runtime for the 9.0 installation.
+If another runtime directory was already orphaned before uninstall, it can be
+collected regardless of whether its version relates to the target. This does
+not remove another recorded SDK or runtime installation.
 
 If a locked file or another error prevents physical removal, return failure
 and distinguish removed files from remaining files. Preserve enough state to
@@ -427,8 +487,8 @@ Add two mutually exclusive options to SDK and runtime uninstall:
 
 | Proposed option | When no standalone spec matches and the argument names an installed version |
 | --- | --- |
-| `--remove-install-specs` | Remove the specs currently resolving to the named installation and uninstall it, then run normal installation and component collection. This is the first action in the interactive prompt. |
-| `--keep-install-specs` | Remove only the named installation record, leave all specs and other installation records unchanged, then collect unreferenced components. This is the "without modifying install specs" action. Later install or update commands may reinstall the version. |
+| `--remove-install-specs` | Remove the specs currently resolving to the named installation and uninstall it, then collect only newly unreferenced installations and run normal component collection. This is the first action in the interactive prompt. |
+| `--keep-install-specs` | Remove only the named installation record, leave all specs and other installation records unchanged, then run normal component collection. This is the "without modifying install specs" action. Later install or update commands may reinstall the version. |
 
 These are action choices, not a general `--yes` or `--force`. Either option skips
 the action-selection prompt in interactive and noninteractive use. Other errors
@@ -449,8 +509,9 @@ remove the matching spec, then report any retained SDK and the specs selecting
 it. Do not expand to other specs. The options do not override that behavior:
 
 - `--remove-install-specs` is redundant when a standalone spec matches. Remove
-  only the matching standalone specs, run normal garbage collection, and leave
-  other specs selecting the same installation unchanged.
+  only the matching standalone specs, collect only newly unreferenced
+  installations, and run normal component collection. Leave other specs
+  selecting the same installation unchanged.
 - `--keep-install-specs` is incompatible with a matching standalone spec, because
   spec-first removal would delete that spec. Report the conflict and fail without
   mutation. Do not silently ignore the option or switch to physical removal.
@@ -472,7 +533,9 @@ In an interactive plan, Cancel changes nothing. File changes while the prompt
 is open require revalidation before applying it. Automatic reconciliation of
 an edited/deleted `global.json` needs no approval, but must not cause an already
 approved plan to remove a different SDK, switch between keeping and removing
-specs, or forget an additional live repository.
+specs, or forget an additional live repository. Revalidate the baseline as well
+as the proposed removals; do not combine a pre-prompt baseline with newly read
+repository requirements.
 
 ## Make the relationships visible in dotnetup list
 
@@ -532,7 +595,9 @@ Warning: Cannot read C:\src\tools\global.json: access denied.
   the table, identifying the affected source or component.
 - **Installation-only rows:** When no current spec resolves to a managed SDK
   or separately installed runtime, show `-` under both Install spec and Source.
-  These installations are eligible for garbage collection.
+  These installations are eligible for full garbage collection by update,
+  or for explicit physical-version uninstall. An unrelated uninstall
+  leaves them alone.
 - **Counts:** Count distinct component/version installations, not repeated rows.
   Installation-only rows count toward installation totals, but not spec totals.
 - **Formatting:** Repeat shared version values on each row, avoid group
@@ -540,6 +605,69 @@ Warning: Cannot read C:\src\tools\global.json: access denied.
 
 Preserve the existing JSON format; any additions needed to expose these
 relationships will be designed separately.
+
+## Implementation options for bounded uninstall cleanup
+
+The observable boundary above is required; the implementation approach is not
+settled. In all options, use one coherent snapshot of current repository
+requirements, installations in the selected root and architecture, and recorded
+subcomponent references. Use last-known requirements for unreadable files as in
+scenario 7. Do not derive the baseline from stale saved channels or compare
+against the state before an earlier repository edit.
+
+All options pass the final installation-removal set to the existing component
+planner. It protects subcomponents referenced by every surviving installation
+and collects orphaned directories as usual. No before/after directory comparison
+or restriction to the removed installations' directory paths is needed.
+
+### Option A: compare references before and after the action
+
+Resolve all specs before uninstall, then resolve the remaining specs for the
+proposed state. Installation candidates are those selected before but not after,
+plus any explicitly targeted physical installation. For SDK-only removal, the
+target is the only installation candidate.
+
+This directly expresses the policy and is the preferred starting point.
+Before/after state must be isolated: the current planner refreshes requirements
+and mutates its in-memory manifest, so planning twice against the same objects
+would not provide independent snapshots. Requirements can be evaluated once
+and reused when only spec membership changes; removing a physical installation
+may require selecting replacement installations for retained specs.
+
+### Option B: restrict candidates to the affected specs and target
+
+Start with the installations selected by the specs being removed and any
+explicit physical target. Remove a candidate only if no remaining spec selects
+it, except when physical removal intentionally keeps specs.
+
+This avoids a second full installation-collection plan and can reuse
+uninstall's existing affected-spec resolution. It still needs complete
+remaining-spec matching; filtering only by the requested version or major
+version is insufficient. Verify that every newly unreferenced installation is
+represented in the candidate set rather than assuming the displayed target is
+the only affected record.
+
+### Option C: protect already-unreferenced installations in the general planner
+
+Identify installations already unreferenced under current requirements and
+preserve them while running the normal installation planner for the proposed
+state. An explicitly targeted installation is exempt from that protection.
+
+This could reuse more of the existing collector, but adds an uninstall-specific
+protection policy to a planner also used for full collection. Apply protection
+before component planning: merely subtracting installation removals from a
+finished full-GC plan could still delete shared files belonging to an
+installation that should have been preserved. Keep full collection behavior
+for other callers unchanged.
+
+Whichever approach is chosen, update coverage for unrelated SDKs released by
+changed/deleted repositories, an explicit already-unreferenced target, a
+missing-target spec-only removal, shared components protected by an already
+unreferenced installation, and continued collection of previously orphaned
+directories. In particular, the existing
+`MatchingSpec_CollectsOtherUnreferencedInstallationsWithoutPrompt`
+test encodes the old broad-cleanup policy and must change when implementation
+work begins; it is intentionally unchanged in this design-only revision.
 
 ## Current behavior and supporting issues
 
@@ -552,7 +680,10 @@ already works:
   currently combines installation collection with component collection.
   Installation collection reconciles repository specs and selects unreferenced
   installations for removal; component collection deletes directories no retained
-  installation references. SDK-only removal needs the latter without the former.
+  installation references. SDK-only removal already skips installation collection,
+  and continues to scan for all orphaned directories. Only spec-removal
+  installation collection needs the bounded cleanup proposed above; component
+  collection remains unchanged.
   [`Installation.Subcomponents`](../../../../src/Installer/dotnetup.Library/DotnetupManifestData.cs)
   records the component-directory references used for that cleanup.
 - [`InstallWorkflow`](../../../../src/Installer/dotnetup.Library/Commands/Shared/InstallWorkflow.cs)
@@ -577,4 +708,4 @@ already works:
 | [dotnet/sdk#56226](https://github.com/dotnet/sdk/issues/56226) | Refresh requirements before matching; avoid repeated identical uninstalls. |
 | [dotnet/sdk#56227](https://github.com/dotnet/sdk/issues/56227) | Preserve minimum versions, roll-forward, and prerelease semantics when determining satisfaction. |
 | [dotnet/sdk#53396](https://github.com/dotnet/sdk/issues/53396) | Prerelease-policy correctness as well as documentation. |
-| [dotnet/sdk#55312](https://github.com/dotnet/sdk/issues/55312) | Example of uninstall triggering collection of another unused SDK. Normal garbage collection is preserved by this proposal. |
+| [dotnet/sdk#55312](https://github.com/dotnet/sdk/issues/55312) | Example of uninstall triggering collection of another unused SDK. This revision preserves pre-existing unreferenced installations during uninstall, while retaining normal orphaned-component collection. |
